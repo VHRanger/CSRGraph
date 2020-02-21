@@ -1,2 +1,1 @@
-# CSRGraph
-Fast python graphs
+To be completed

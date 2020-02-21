@@ -1,0 +1,5 @@
+networkx
+numba
+numpy
+pandas
+scipy
