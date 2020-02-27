@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/VHRanger/CSRGraph.svg?branch=master)](https://travis-ci.com/VHRanger/CSRGraph)
+
 TODO:
 
 1) Break Node2Vec into separate class
