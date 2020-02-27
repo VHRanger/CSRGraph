@@ -1,2 +1,2 @@
 from csrgraph import graph
-from csrgraph.graph import Graph
+from csrgraph.graph import CSRGraph
