@@ -9,7 +9,7 @@ from scipy import sparse
 import time
 import warnings
 
-from csrgraph.methods import _row_norm, _random_walk
+from csrgraph.methods import (_row_norm, _random_walk, _node2vec_walks)
 
 class CSRGraph():
     """
@@ -50,6 +50,9 @@ class CSRGraph():
         elif isinstance(data, nx.Graph):
             self.mat = nx.adj_matrix(data)
             nodenames = list(data)
+            # TODO: test
+            if np.array_equal(range(len(data)), nodenames):
+                nodenames = None
         # CSR Matrix Input
         elif isinstance(data, sparse.csr_matrix):
             self.mat = data
@@ -70,7 +73,7 @@ class CSRGraph():
 
         # node name -> node ID
         if nodenames is not None:
-            self.names = dict(zip(nodenames, range(self.dst.size)))
+            self.names = dict(zip(nodenames, np.arange(self.dst.size)))
 
         # indptr has one more element than nnodes
         self.nnodes = self.indptr.size - 1
@@ -105,6 +108,24 @@ class CSRGraph():
             # TODO: Change to mapping method to str
             return [self.names[i] for i in res]
 
+    def matrix(self):
+        """
+        Return's the graph's scipy sparse CSR matrix
+        """
+        if hasattr(self, 'mat'):
+            return self.mat
+        else:
+            return sparse.csr_matrix((weights, dst, indptr))
+
+    def nodes(self):
+        """
+        Returns the graph's nodes, in order
+        """
+        if hasattr(self, 'names'):
+            return self.names.keys()
+        else:
+            return np.arange(self.nnodes)
+
     def normalize(self, return_self=True):
         """
         Normalizes edge weights per node
@@ -124,15 +145,14 @@ class CSRGraph():
 
     def random_walks(self,
                 walklen=10,
-                epochs=3,
+                epochs=1,
                 start_nodes=None,
-                normalize_self=False):
+                normalize_self=False,
+                return_weight=1.,
+                neighbor_weight=1.):
         """
         Create random walks from the transition matrix of a graph 
             in CSR sparse format
-
-        NOTE: scales linearly with threads but hyperthreads don't seem to 
-                accelerate this linearly
 
         Parameters
         ----------
@@ -167,7 +187,7 @@ class CSRGraph():
         """
         # Make csr graph
         if normalize_self:
-            self.normalize()
+            self.normalize(return_self=True)
             T = self
         else:
             T = self.normalize(return_self=False)
@@ -175,8 +195,18 @@ class CSRGraph():
         if start_nodes is None:
             start_nodes = np.arange(n_rows)
         sampling_nodes = np.tile(start_nodes, epochs)
-        walks = _random_walk(T.weights, T.indptr, T.dst, 
-                            sampling_nodes, walklen)
+        # Node2Vec Biased walks if parameters specified
+        if (return_weight > 1. or return_weight < 1. 
+                or neighbor_weight < 1. or neighbor_weight > 1.):
+            walks = _node2vec_walks(T.weights, T.indptr, T.dst, 
+                                    sampling_nodes=sampling_nodes, 
+                                    walklen=walklen, 
+                                    return_weight=return_weight, 
+                                    neighbor_weight=neighbor_weight)
+        # much faster implementation for regular walks
+        else:
+            walks = _random_walk(T.weights, T.indptr, T.dst, 
+                                 sampling_nodes, walklen)
         return walks
 
     
