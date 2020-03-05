@@ -17,5 +17,4 @@ TODO:
      Other??
 
 3) Make Graph Layout Optimizer
-    How??
-    Ultra fast 2d embedder..?
+    fast linear embedder (truncatedsvd?)
