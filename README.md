@@ -3,8 +3,7 @@
 
 TODO:
 
-- documentation // additional tests 
-    predict_new 
+- predict_new && test
 
 - Best/fastest graph Embed algo 
      GLoVe? 
