@@ -20,19 +20,27 @@ class CSRGraph():
         """
         A class for large, possibly on-disk graphs.
 
-        input : The graph data. Can be one of:
+        data : The graph data. Can be one of:
 
             **NetworkX Graph**
 
             **CSR Matrix**
             
             **(data, indices, indptr)**
+            
+            **CSRGraph object
 
         nodenames (array of str or int) : Node names
             The position in this array should correspond with the node ID
             So if passing a CSR Matrix or raw data, it should be co-indexed
             with the matrix/raw data arrays
-        
+            
+        threads : int
+            number of threads to leverage for methods in this graph.
+            WARNING: changes the numba environment variable to do it.
+            Recompiles methods and changes it when changed.
+            0 is numba default (usually all threads)
+ 
         TODO: add numpy mmap support for very large on-disk graphs
             This also requires routines to read/write
             edgelists, etc. from disk
@@ -95,20 +103,6 @@ class CSRGraph():
             _row_norm.recompile()
             _node2vec_walks.recompile()
 
-    def __getitem__(self, node):
-        """
-        returns a node's edges
-
-        TODO: test
-        """
-        if type(node) is not str:
-            return self.dst[self.indptr[node] : self.indptr[node+1]]
-        else:
-            idx = self.names[node]
-            res = self.dst[self.indptr[idx] : self.indptr[idx+1]]
-            # TODO: Change to mapping method to str
-            return [self.names[i] for i in res]
-
     def matrix(self):
         """
         Return's the graph's scipy sparse CSR matrix
@@ -132,6 +126,10 @@ class CSRGraph():
         Normalizes edge weights per node
 
         For any node in the Graph, the new edges' weights will sum to 1
+        
+        return_self : bool
+            whether to change the graph's values and return itself
+            this lets us call `G.normalize()` directly
         """
         new_weights = _row_norm(self.weights, self.indptr)
         if return_self:
@@ -169,7 +167,7 @@ class CSRGraph():
             more like a Breadth-First Search.
             Having this very high  (> 2) makes search very local.
             Equal to the inverse of p in the Node2Vec paper.
-        neighbor_weight : float in (0, inf]
+        explore_weight : float in (0, inf]
             Weight on the probability of visitng a neighbor node
             to the one we're coming from in the random walk
             Having this higher tends the walks to be 
