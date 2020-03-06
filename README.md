@@ -11,8 +11,9 @@ TODO:
 
 5) TODOs in CSR (mmap, etc.)
 
-6) fastest graph Embed algo
+6) Best/fastest graph Embed algo
      GLoVe?
+        on laplacian/adj/normed adj matrix?
      UMAP?
      Other??
 
