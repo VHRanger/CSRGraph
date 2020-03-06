@@ -13,7 +13,19 @@ from csrgraph import graph as csrg
 @jit(nopython=True, parallel=True, nogil=True, fastmath=True)
 def _row_norm(weights, indptr):
     """
-    Returns the weights for normalized rows in a CSR Matrix
+    Returns the weights for normalized rows in a CSR Matrix.
+    
+    weights : array[float]
+        The data array from a CSR Matrix. 
+        For a scipy.csr_matrix, is accessed by M.data
+  
+    indptr : array[int]
+        The index pointer array from a CSR Matrix. 
+        For a scipy.csr_matrix, is accessed by M.indptr
+        
+    ----------------
+    returns : array[float32]
+        The normalized data array for the CSR Matrix
     """
     n_nodes = indptr.size - 1
     res = np.empty(weights.size, dtype=np.float32)
@@ -112,7 +124,9 @@ def _node2vec_inner(
     return_weight, neighbor_weight):
     """
     Inner loop core for node2vec walks
-    Does the biased walk updating
+    Does the biased walk updating (pure function)
+    
+    All arguments are directly from the node2vec walks method
     """
     # Find rows in csr indptr
     prev = res[i, k-1]
@@ -169,7 +183,7 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
         more like a Breadth-First Search.
         Having this very high  (> 2) makes search very local.
         Equal to the inverse of p in the Node2Vec paper.
-    neighbor_weight : float in (0, inf]
+    explore_weight : float in (0, inf]
         Weight on the probability of visitng a neighbor node
         to the one we're coming from in the random walk
         Having this higher tends the walks to be 
