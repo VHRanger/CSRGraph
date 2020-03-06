@@ -93,6 +93,7 @@ class CSRGraph():
             os.environ['NUMBA_NUM_THREADS'] = threads
             _random_walk.recompile()
             _row_norm.recompile()
+            _node2vec_walks.recompile()
 
     def __getitem__(self, node):
         """
