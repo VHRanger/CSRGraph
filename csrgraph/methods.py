@@ -10,7 +10,7 @@ from scipy import sparse
 
 from csrgraph import graph as csrg
 
-@jit(nopython=True, parallel=True, nogil=True)
+@jit(nopython=True, parallel=True, nogil=True, fastmath=True)
 def _row_norm(weights, indptr):
     """
     Returns the weights for normalized rows in a CSR Matrix
@@ -25,7 +25,7 @@ def _row_norm(weights, indptr):
     return res
 
 
-@jit(nopython=True, parallel=True, nogil=True)
+@jit(nopython=True, parallel=True, nogil=True, fastmath=True)
 def _random_walk(weights, indptr, dst,
                  sampling_nodes, walklen):
     """
@@ -88,7 +88,7 @@ def _random_walk(weights, indptr, dst,
     return res
 
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, fastmath=True)
 def _node2vec_first_step(state, Tdata, Tindices, Tindptr):
     """
     Inner code for node2vec walks
@@ -105,7 +105,7 @@ def _node2vec_first_step(state, Tdata, Tindices, Tindptr):
     return state
 
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, fastmath=True)
 def _node2vec_inner(
     res, i, k, state,
     Tdata, Tindices, Tindptr, 
@@ -138,7 +138,7 @@ def _node2vec_inner(
     return new_state
 
 
-@jit(nopython=True, nogil=True, parallel=True)
+@jit(nopython=True, nogil=True, parallel=True, fastmath=True)
 def _node2vec_walks(Tdata, Tindptr, Tindices,
                     sampling_nodes,
                     walklen,
