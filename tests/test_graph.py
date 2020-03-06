@@ -172,7 +172,7 @@ class TestNodeWalks(unittest.TestCase):
         walklen=10
         fully_connected = np.ones((n_nodes,n_nodes))
         np.fill_diagonal(fully_connected, 0)
-        fully_connected = CSRGraph(fully_connected).normalize()
+        fully_connected = CSRGraph(fully_connected, threads=1).normalize()
         t1 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
@@ -209,7 +209,7 @@ class TestNodeWalks(unittest.TestCase):
         walklen=10
         fully_connected = np.ones((n_nodes,n_nodes))
         np.fill_diagonal(fully_connected, 0)
-        fully_connected = CSRGraph(fully_connected).normalize()
+        fully_connected = CSRGraph(fully_connected, threads=1).normalize()
         t1 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
@@ -241,6 +241,24 @@ class TestNodeWalks(unittest.TestCase):
             if not i.all():
                 print(f"ERROR in walks\n\n {t2}")
             self.assertTrue(i.all())
+
+            
+    def test_parallel_n2v(self):
+        """
+        Numba is capricious with parallel node2vec, test that it works
+        """
+        n_nodes = 10
+        n_epoch = 4
+        walklen=30
+        fully_connected = np.ones((n_nodes,n_nodes))
+        np.fill_diagonal(fully_connected, 0)
+        fully_connected = CSRGraph(fully_connected, threads=0).normalize()
+        t1 = fully_connected.random_walks(
+            walklen=walklen,
+            epochs=n_epoch,
+            return_weight=0.5,
+            neighbor_weight=1.5)
+
 
 if __name__ == '__main__':
     unittest.main()
