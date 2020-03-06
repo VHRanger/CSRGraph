@@ -15,8 +15,11 @@ TODO:
 - TODOs in CSR (mmap, etc.) 
 
 - beat node2vec at its own game 
+
     try UMAP, etc. 
 
 - Make Graph Layout Optimizer 
+
     fast Glove with smart initial values? 
+    
     Can be only a few passes 
