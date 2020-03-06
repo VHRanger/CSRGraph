@@ -3,19 +3,19 @@
 
 TODO:
 
-6) documentation // additional tests
+- documentation // additional tests
     predict_new
 
-5) beat node2vec at its own game
-    try UMAP, etc.
-
-5) TODOs in CSR (mmap, etc.)
-
-6) Best/fastest graph Embed algo
+- Best/fastest graph Embed algo
      GLoVe?
         on laplacian/adj/normed adj matrix?
      Super simple optimization objective for unweighed graph
          sum W^T * Wstar (f(x) and log(x) disappear)
 
-3) Make Graph Layout Optimizer
+- TODOs in CSR (mmap, etc.)
+
+- beat node2vec at its own game
+    try UMAP, etc.
+
+- Make Graph Layout Optimizer
     fast linear embedder (truncatedsvd?)
