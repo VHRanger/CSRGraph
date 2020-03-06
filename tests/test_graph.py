@@ -176,14 +176,14 @@ class TestNodeWalks(unittest.TestCase):
         t1 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
-            return_weight=9999,
+            return_weight=99999,
             neighbor_weight=1.)
         # Neighbor weight ~ 0 should also loop 
         t2 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
             return_weight=1.,
-            neighbor_weight=0.001)
+            neighbor_weight=0.0001)
         self.assertTrue(t1.shape == (n_nodes * n_epoch, walklen))
         # even columns should be equal (always returning)
         np.testing.assert_array_equal(t1[:, 0], t1[:, 2])
@@ -213,14 +213,14 @@ class TestNodeWalks(unittest.TestCase):
         t1 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
-            return_weight=0.001,
+            return_weight=0.0001,
             neighbor_weight=1.)
         # Neighbor weight ~inf should also never return 
         t2 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
             return_weight=1.,
-            neighbor_weight=9999)
+            neighbor_weight=99999)
         self.assertTrue(t1.shape == (n_nodes * n_epoch, walklen))
         # Test that it doesn't loop back
         # Difference between skips shouldnt be 0 anywhere
