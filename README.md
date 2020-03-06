@@ -18,4 +18,5 @@ TODO:
     try UMAP, etc.
 
 - Make Graph Layout Optimizer
-    fast linear embedder (truncatedsvd?)
+    fast Glove with smart initial values?
+    Can be only a few passes
