@@ -14,8 +14,8 @@ TODO:
 6) Best/fastest graph Embed algo
      GLoVe?
         on laplacian/adj/normed adj matrix?
-     UMAP?
-     Other??
+     Super simple optimization objective for unweighed graph
+         sum W^T * Wstar (f(x) and log(x) disappear)
 
 3) Make Graph Layout Optimizer
     fast linear embedder (truncatedsvd?)
