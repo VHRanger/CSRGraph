@@ -5,17 +5,14 @@ TODO:
 
 - predict_new && test
 
-- Best/fastest graph Embed algo 
-     GLoVe? 
-        on laplacian/adj/normed adj matrix? 
-     Super simple optimization objective for unweighed graph 
-         sum W^T * Wstar (f(x) and log(x) disappear) 
+- Beat Node2Vec perf
+     GLoVe on laplacian/adj/normed adj matrix? 
 
 - TODOs in CSR (mmap, etc.) 
 
-- beat node2vec at its own game 
-
-    try UMAP, etc. 
+- Embed Twitter
+     
+     Large Graph Reafer
 
 - Make Graph Layout Optimizer 
 
