@@ -2,17 +2,17 @@
 
 
 TODO:
+     
+- Re-work GLoVe
 
-- predict_new && test
-
-- Beat Node2Vec perf
-     GLoVe on laplacian/adj/normed adj matrix? 
-
-- TODOs in CSR (mmap, etc.) 
+     current impl creates overlap between nodes..?
+     Should aim for better separation
 
 - Embed Twitter
      
-     Large Graph Reafer
+     Large Graph Reader // mmap if needed
+     
+- predict_new && test it
 
 - Make Graph Layout Optimizer 
 
