@@ -1,6 +1,8 @@
 import networkx as nx
 import numpy as np
+import random
 from scipy import sparse
+from sklearn import cluster, manifold, metrics
 import unittest
 import warnings
 
@@ -37,6 +39,43 @@ disconnected_graph = sparse.csr_matrix(np.array([
     [0., 0., 0.1, 0.7, 0.2],
     ], dtype=np.float32)
 )
+
+class TestGlove(unittest.TestCase):
+    def test_clusters_disjoint_graphs(self):
+        """
+        Embedding disjoint subgraphs should cluster correctly
+        """
+        n_clusters = 5
+        graph_size = 150
+        G = nx.complete_graph(graph_size)
+        for i in range(1, n_clusters):
+            G = nx.disjoint_union(G, nx.complete_graph(graph_size))
+        labels = []
+        for i in range(n_clusters):
+            labels.append([i] * graph_size)
+        labels = sum(labels, [])
+        # Embed Graph and cluster around it
+        G = csrgraph.CSRGraph(G)
+        v = G.embeddings(
+            n_components=16,
+            tol=0.0001,
+            max_epoch=25000, 
+            learning_rate=0.1, 
+            max_loss=10.,
+            verbose=False
+        )
+        cluster_hat = cluster.AgglomerativeClustering(
+            n_clusters=n_clusters,
+            affinity='cosine', 
+            linkage='average'
+        ).fit(v).labels_
+        print(cluster_hat)
+        r1 = metrics.adjusted_mutual_info_score(cluster_hat, labels)
+        r2 = metrics.adjusted_rand_score(cluster_hat, labels)
+        r3 = metrics.fowlkes_mallows_score(cluster_hat, labels)
+        self.assertGreaterEqual(r1, 0.35)
+        self.assertGreaterEqual(r2, 0.35)
+        self.assertGreaterEqual(r3, 0.35)
 
 class TestGraph(unittest.TestCase):
     def test_api(self):
