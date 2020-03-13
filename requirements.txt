@@ -3,3 +3,4 @@ numba
 numpy
 pandas
 scipy
+scikit-learn
