@@ -10,6 +10,7 @@ import time
 import warnings
 
 from csrgraph.methods import (_row_norm, _random_walk, _node2vec_walks)
+from csrgraph.glove import glove_by_edges
 
 class CSRGraph():
     """
@@ -25,22 +26,22 @@ class CSRGraph():
             **NetworkX Graph**
 
             **CSR Matrix**
-            
+
             **(data, indices, indptr)**
-            
+
             **CSRGraph object
 
         nodenames (array of str or int) : Node names
             The position in this array should correspond with the node ID
             So if passing a CSR Matrix or raw data, it should be co-indexed
             with the matrix/raw data arrays
-            
+
         threads : int
             number of threads to leverage for methods in this graph.
             WARNING: changes the numba environment variable to do it.
             Recompiles methods and changes it when changed.
             0 is numba default (usually all threads)
- 
+
         TODO: add numpy mmap support for very large on-disk graphs
             This also requires routines to read/write
             edgelists, etc. from disk
@@ -126,7 +127,7 @@ class CSRGraph():
         Normalizes edge weights per node
 
         For any node in the Graph, the new edges' weights will sum to 1
-        
+
         return_self : bool
             whether to change the graph's values and return itself
             this lets us call `G.normalize()` directly
@@ -135,7 +136,7 @@ class CSRGraph():
         if return_self:
             self.weights = new_weights
             if hasattr(self, 'mat'):
-                self.mat = sparse.csr_matrix((self.weights, self.dst, 
+                self.mat = sparse.csr_matrix((self.weights, self.dst,
                                                 self.indptr))
             return self
         else:
@@ -150,7 +151,7 @@ class CSRGraph():
                 return_weight=1.,
                 neighbor_weight=1.):
         """
-        Create random walks from the transition matrix of a graph 
+        Create random walks from the transition matrix of a graph
             in CSR sparse format
 
         Parameters
@@ -163,14 +164,14 @@ class CSRGraph():
             number of times to start a walk from each nodes
         return_weight : float in (0, inf]
             Weight on the probability of returning to node coming from
-            Having this higher tends the walks to be 
+            Having this higher tends the walks to be
             more like a Breadth-First Search.
             Having this very high  (> 2) makes search very local.
             Equal to the inverse of p in the Node2Vec paper.
         explore_weight : float in (0, inf]
             Weight on the probability of visitng a neighbor node
             to the one we're coming from in the random walk
-            Having this higher tends the walks to be 
+            Having this higher tends the walks to be
             more like a Depth-First Search.
             Having this very high makes search more outward.
             Having this very low makes search very local.
@@ -181,7 +182,7 @@ class CSRGraph():
         Returns
         -------
         out : 2d np.array (n_walks, walklen)
-            A matrix where each row is a random walk, 
+            A matrix where each row is a random walk,
             and each entry is the ID of the node
         """
         # Make csr graph
@@ -195,27 +196,40 @@ class CSRGraph():
             start_nodes = np.arange(n_rows)
         sampling_nodes = np.tile(start_nodes, epochs)
         # Node2Vec Biased walks if parameters specified
-        if (return_weight > 1. or return_weight < 1. 
+        if (return_weight > 1. or return_weight < 1.
                 or neighbor_weight < 1. or neighbor_weight > 1.):
-            walks = _node2vec_walks(T.weights, T.indptr, T.dst, 
-                                    sampling_nodes=sampling_nodes, 
-                                    walklen=walklen, 
-                                    return_weight=return_weight, 
+            walks = _node2vec_walks(T.weights, T.indptr, T.dst,
+                                    sampling_nodes=sampling_nodes,
+                                    walklen=walklen,
+                                    return_weight=return_weight,
                                     neighbor_weight=neighbor_weight)
         # much faster implementation for regular walks
         else:
-            walks = _random_walk(T.weights, T.indptr, T.dst, 
+            walks = _random_walk(T.weights, T.indptr, T.dst,
                                  sampling_nodes, walklen)
         return walks
 
-    
-    #
-    #
-    # TODO: Map node names method in random_walks here
-    #       Add tests for string node names
-    #
-    #
 
+    def embeddings(self, n_components=1, tol=0.0001,
+                   max_epoch=10_000, 
+                   learning_rate=0.1, 
+                   max_loss=10.,
+                   method="edges",
+                   verbose=True):
+        """
+        Create embeddings using pseudo-GLoVe
+
+        TODO: explore if single w vector works as well
+            GLoVe uses two matrices..?
+        """
+        # Fast impl for undirected, unweighed graphs
+        # TODO: Could be done on GPU?
+        w = glove_by_edges(self.weights, self.dst, self.indptr, self.nnodes,
+                           n_components, tol=tol, max_epoch=max_epoch,
+                           learning_rate=learning_rate, max_loss=max_loss, 
+                           verbose=verbose
+        )
+        return w
 
     #
     #
