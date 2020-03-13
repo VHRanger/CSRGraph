@@ -5,8 +5,8 @@ TODO:
      
 - Re-work GLoVe
 
-     current impl creates overlap between nodes..?
-     Should aim for better separation
+     current impl creates overlap between nodes embeddings?
+     Should aim for better separation by reworking core math (see GLoVe paper)
 
 - Embed Twitter
      
