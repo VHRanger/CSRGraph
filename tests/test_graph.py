@@ -1,5 +1,6 @@
 import networkx as nx
 import numpy as np
+import pandas as pd
 import random
 from scipy import sparse
 from sklearn import cluster, manifold, metrics
@@ -69,7 +70,6 @@ class TestGlove(unittest.TestCase):
             affinity='cosine', 
             linkage='average'
         ).fit(v).labels_
-        print(cluster_hat)
         r1 = metrics.adjusted_mutual_info_score(cluster_hat, labels)
         r2 = metrics.adjusted_rand_score(cluster_hat, labels)
         r3 = metrics.fowlkes_mallows_score(cluster_hat, labels)
@@ -197,6 +197,22 @@ class TestSparseUtilities(unittest.TestCase):
         )
         self.assertTrue(True, "Should get here without issues again")
 
+class TestFileInput(unittest.TestCase):
+    """
+    Test 
+    """
+    def test_karate(self):
+        fname = "./data/karate_edges.txt"
+        G = CSRGraph.read_edgelist(fname)
+        m = G.mat.todense()
+        df = pd.read_csv(fname, sep="\t", header=None)
+        df.columns = ['src', 'dst']
+        for i in range(len(df)):
+            s = df.iloc[i].src
+            d = df.iloc[i].dst
+            self.assertTrue(m[s-1, d-1] == 1)
+        # Only those edges are present
+        self.assertTrue(m.sum() == 154)
 
 class TestNodeWalks(unittest.TestCase):
     """
