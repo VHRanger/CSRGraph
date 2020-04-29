@@ -231,6 +231,65 @@ class CSRGraph():
         )
         return w
 
+    @staticmethod
+    def read_edgelist(f, sep="\t", header=None):
+        """
+        Creates a CSRGraph from an edgelist
+
+        f : str
+            Filename to read
+        sep : str
+            CSV-style separator. Eg. Use "," if comma separated
+        header : int or None
+            pandas read_csv parameter. Use if column names are present
+
+        TODO: support pd.read_csv kwargs
+        TODO: Support node names
+        """
+        elist = pd.read_csv(f, sep=sep, header=header)
+        if len(elist.columns) == 2:
+            elist.columns = ['src', 'dst']
+        elif len(elist.columns) == 3:
+            elist.columns = ['src', 'dst', 'weight']
+        else: 
+            raise ValueError(f"""
+                Invalid columns: {elist.columns}
+                Expected 2 (source, destination)
+                or 3 (source, destination, weight)
+            """)
+        elist.src = elist.src.astype(np.int64)
+        elist.dst = elist.dst.astype(np.int64)
+        elist = elist.sort_values(by='src').reset_index(drop=True)
+        dst = elist.dst.to_numpy() - 1
+        src = np.zeros(elist.src.nunique() + 1)
+        # Fill indptr array
+        src[0] = 0 # indices are where nodes start
+        elist['idx'] = elist.index
+        src[1:] = (
+            elist[['idx', 'src']]
+            # Max idx per node
+            .groupby('src')
+            .max()
+            # Reset to pd.Series
+            .reset_index(drop=True)
+            .astype(np.int64)
+            .to_numpy()
+            .flatten()
+            # This gets last node
+            # We want next one (array start)
+            + 1
+        )
+        if 'weight' in elist.columns:
+            weights = elist.weights.astype(np.float)
+        else:
+            weights = np.ones(dst.shape[0])
+        # clean up temp data
+        elist = None
+        gc.collect()
+        return CSRGraph(
+            sparse.csr_matrix((weights, dst, src))
+        )
+
     #
     #
     # TODO: Organize Graph method here
