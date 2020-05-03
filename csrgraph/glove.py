@@ -64,7 +64,8 @@ def _glove_edges_update(data, dst, indptr,
         # This zeros out the entry weight and the log(x)
         loss = pred + b[node1] + b[node2]
         # TODO: missing entry weight here and log(x)
-        loss = (loss * np.arcsinh(data[edge]))
+        entry_w = min(1., data[edge] / 10) ** 0.5
+        loss = entry_w * (loss - np.log(data[edge]))
         # Clip the loss for numerical stability.
         if loss < -max_loss:
             loss = -max_loss
@@ -81,10 +82,25 @@ def _glove_edges_update(data, dst, indptr,
     return np.max(largest_grad)
 
 
+##########################
+#                        #
+#    /\ Original impl    #
+#    ||                  #
+#    \/ New Stuff        #
+#                        #
+##########################
+
+
+##########################
+#                        #
+#          Methods       #
+#                        #
+##########################
+
+
 def glove_by_edges(data, dst, indptr, nnodes, n_components=1, 
                    tol=0.0001, max_epoch=10_000, 
-                   learning_rate=0.1, max_loss=10.,
-                   verbose=True):
+                   learning_rate=0.1, max_loss=10.):
     """
     Create embeddings using pseudo-GLoVe
 
@@ -112,6 +128,8 @@ def glove_by_edges(data, dst, indptr, nnodes, n_components=1,
 @jit(nopython=True)
 def glove_by_nodes(dst, indptr, learning_rate=0.01):
     """
-    similar to _by_edges, but by nodes (faster!)
+    similar to _by_edges, but by nodes
+
+    TODO: impl
     """
     pass
