@@ -20,5 +20,6 @@ setup(
         'pandas',
         'scipy',
         'scikit-learn',
+        'tqdm',
     ],
 )
