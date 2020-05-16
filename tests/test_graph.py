@@ -42,7 +42,7 @@ disconnected_graph = sparse.csr_matrix(np.array([
 )
 
 class TestGlove(unittest.TestCase):
-    def test_clusters_disjoint_graphs(self):
+    def test_given_disjoint_graphs_embeddings_cluster(self):
         """
         Embedding disjoint subgraphs should cluster correctly
         """
@@ -58,11 +58,11 @@ class TestGlove(unittest.TestCase):
         # Embed Graph and cluster around it
         G = csrgraph.CSRGraph(G)
         v = G.embeddings(
-            n_components=16,
-            tol=0.0001,
-            max_epoch=25000, 
-            learning_rate=0.1, 
-            max_loss=10.,
+            n_components=4,
+            tol=0.1,
+            max_epoch=550,
+            learning_rate=0.05, 
+            max_loss=1.,
             verbose=False
         )
         cluster_hat = cluster.AgglomerativeClustering(
@@ -73,9 +73,9 @@ class TestGlove(unittest.TestCase):
         r1 = metrics.adjusted_mutual_info_score(cluster_hat, labels)
         r2 = metrics.adjusted_rand_score(cluster_hat, labels)
         r3 = metrics.fowlkes_mallows_score(cluster_hat, labels)
-        self.assertGreaterEqual(r1, 0.35)
-        self.assertGreaterEqual(r2, 0.35)
-        self.assertGreaterEqual(r3, 0.35)
+        self.assertGreaterEqual(r1, 0.65)
+        self.assertGreaterEqual(r2, 0.65)
+        self.assertGreaterEqual(r3, 0.65)
 
 class TestGraph(unittest.TestCase):
     def test_api(self):
