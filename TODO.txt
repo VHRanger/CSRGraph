@@ -18,10 +18,13 @@ add link prediction
 	- refactor to uint32 nodes
 	- Throw on huge graphs > 4B nodes
 
-## Edge Reordering
+## Edge Reordering // Graph Layout Optimizer
 	- Hilbert edge order
 		http://www.frankmcsherry.org/graph/scalability/cost/2015/01/15/COST.html
 	- Embedding edge order
+
+## Embed Twitter
+
 
 ## OpenCL
 	Example usage
