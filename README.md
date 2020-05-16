@@ -1,21 +1,12 @@
 [![Build Status](https://travis-ci.com/VHRanger/CSRGraph.svg?branch=master)](https://travis-ci.com/VHRanger/CSRGraph)
 
 
-TODO:
-     
-- Re-work GLoVe
+# CSRGraphs
 
-     current impl creates overlap between nodes embeddings?
-     Should aim for better separation by reworking core math (see GLoVe paper)
+This library aims to be a graph analogue to Pandas. It aims to provide fast and memory efficient operations for read-only graphs.
 
-- Embed Twitter
-     
-     Large Graph Reader // mmap if needed
-     
-- predict_new && test it
+By exploiting [CSR Sparse matrices](https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_row_(CSR,_CRS_or_Yale_format\)), we can efficiently pack and traverse graphs in memory (as long as we don't add/delete nodes often).
 
-- Make Graph Layout Optimizer 
+# Installation
 
-    fast Glove with smart initial values? 
-    
-    Can be only a few passes 
+`pip install csrgraph`
