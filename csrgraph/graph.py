@@ -49,7 +49,7 @@ class CSRGraph():
         # If input is a CSRGraph, copy
         if isinstance(data, CSRGraph):
             self.weights = data.weights
-            self.indptr = data.indptr
+            self.src = data.src
             self.dst = data.dst
             try:
                 self.mat = data.mat
@@ -69,24 +69,27 @@ class CSRGraph():
         elif isinstance(data, np.ndarray):
             self.mat = sparse.csr_matrix(data)
         else:
-            raise ValueError('Incorrect input type')
+            raise ValueError(f"Incorrect input data type: {type(data).__name__}")
         if hasattr(self, 'mat'):
             # edge weights. Coindexed to dst
             # TODO: don't store data if it's all 1's
             self.weights = self.mat.data
             # start index of the edges for a node
             # indexes into data and dst
-            self.indptr = self.mat.indptr
+            self.src = self.mat.indptr
             # edge destinations
             self.dst = self.mat.indices
-
         # node name -> node ID
         if nodenames is not None:
             self.names = dict(zip(nodenames, np.arange(self.dst.size)))
-
         # indptr has one more element than nnodes
-        self.nnodes = self.indptr.size - 1
-
+        self.nnodes = self.src.size - 1
+        # Bounds check once otherwise there be dragons
+        max_idx = np.max(self.dst)
+        if self.nnodes < max_idx:
+            raise ValueError(f"""
+                Out of bounds node: {max_idx}, nnodes: {self.nnodes}
+            """)
         # Manage threading through Numba hack
         if type(threads) is not int:
             raise ValueError("Threads argument must be an int!")
@@ -111,7 +114,7 @@ class CSRGraph():
         if hasattr(self, 'mat'):
             return self.mat
         else:
-            return sparse.csr_matrix((weights, dst, indptr))
+            return sparse.csr_matrix((weights, dst, src))
 
     def nodes(self):
         """
@@ -132,16 +135,15 @@ class CSRGraph():
             whether to change the graph's values and return itself
             this lets us call `G.normalize()` directly
         """
-        new_weights = _row_norm(self.weights, self.indptr)
+        new_weights = _row_norm(self.weights, self.src)
         if return_self:
             self.weights = new_weights
             if hasattr(self, 'mat'):
-                self.mat = sparse.csr_matrix((self.weights, self.dst,
-                                                self.indptr))
+                self.mat=sparse.csr_matrix((self.weights, self.dst, self.src))
             return self
         else:
             return CSRGraph(sparse.csr_matrix(
-                (new_weights, self.dst, self.indptr)))
+                (new_weights, self.dst, self.src)))
 
     def random_walks(self,
                 walklen=10,
@@ -198,23 +200,22 @@ class CSRGraph():
         # Node2Vec Biased walks if parameters specified
         if (return_weight > 1. or return_weight < 1.
                 or neighbor_weight < 1. or neighbor_weight > 1.):
-            walks = _node2vec_walks(T.weights, T.indptr, T.dst,
+            walks = _node2vec_walks(T.weights, T.src, T.dst,
                                     sampling_nodes=sampling_nodes,
                                     walklen=walklen,
                                     return_weight=return_weight,
                                     neighbor_weight=neighbor_weight)
         # much faster implementation for regular walks
         else:
-            walks = _random_walk(T.weights, T.indptr, T.dst,
+            walks = _random_walk(T.weights, T.src, T.dst,
                                  sampling_nodes, walklen)
         return walks
 
 
-    def embeddings(self, n_components=1, tol=0.0001,
-                   max_epoch=10_000, 
-                   learning_rate=0.1, 
-                   max_loss=10.,
-                   method="edges",
+    def embeddings(self, n_components=2,
+                   learning_rate=0.05, max_loss=10.,
+                   tol="auto", tol_samples=10,
+                   max_epoch=500,
                    verbose=True):
         """
         Create embeddings using pseudo-GLoVe
@@ -224,11 +225,12 @@ class CSRGraph():
         """
         # Fast impl for undirected, unweighed graphs
         # TODO: Could be done on GPU?
-        w = glove_by_edges(self.weights, self.dst, self.indptr, self.nnodes,
-                           n_components, tol=tol, max_epoch=max_epoch,
-                           learning_rate=learning_rate, max_loss=max_loss, 
-                           verbose=verbose
-        )
+        if tol == 'auto':
+            tol = max(learning_rate / 2, 0.02)
+        w = glove_by_edges(self.weights, self.dst, self.src,
+                           n_components, tol=tol, tol_samples=tol_samples,
+                           max_epoch=max_epoch, learning_rate=learning_rate, 
+                           max_loss=max_loss, verbose=verbose)
         return w
 
     @staticmethod
@@ -242,6 +244,8 @@ class CSRGraph():
             CSV-style separator. Eg. Use "," if comma separated
         header : int or None
             pandas read_csv parameter. Use if column names are present
+
+        Returns : CSRGraph
 
         TODO: support pd.read_csv kwargs
         TODO: Support node names
@@ -257,8 +261,8 @@ class CSRGraph():
                 Expected 2 (source, destination)
                 or 3 (source, destination, weight)
             """)
-        elist.src = elist.src.astype(np.int64)
-        elist.dst = elist.dst.astype(np.int64)
+        elist.src = elist.src.astype(np.uint32)
+        elist.dst = elist.dst.astype(np.uint32)
         elist = elist.sort_values(by='src').reset_index(drop=True)
         dst = elist.dst.to_numpy() - 1
         src = np.zeros(elist.src.nunique() + 1)
@@ -272,7 +276,7 @@ class CSRGraph():
             .max()
             # Reset to pd.Series
             .reset_index(drop=True)
-            .astype(np.int64)
+            .astype(np.uint32)
             .to_numpy()
             .flatten()
             # This gets last node

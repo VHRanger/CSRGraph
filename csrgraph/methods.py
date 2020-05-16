@@ -71,7 +71,7 @@ def _random_walk(weights, indptr, dst,
         and each entry is the ID of the node
     """
     n_walks = len(sampling_nodes)
-    res = np.empty((n_walks, walklen), dtype=np.int64)
+    res = np.empty((n_walks, walklen), dtype=np.uint32)
     n_nodes = indptr.size
     n_edges = weights.size
     for i in numba.prange(n_walks):
@@ -198,7 +198,7 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
         and each entry is the ID of the node
     """
     n_walks = len(sampling_nodes)
-    res = np.empty((n_walks, walklen), dtype=np.int64)
+    res = np.empty((n_walks, walklen), dtype=np.uint32)
     for i in numba.prange(n_walks):
         # Current node (each element is one walk's state)
         state = sampling_nodes[i]
