@@ -2,9 +2,11 @@
 Fast JIT'ed random walk methods.
 These are outside the CSRGraph class so methods can call them
 """
+import gc
 import numba
 from numba import jit
 import numpy as np
+import pandas as pd
 
 @jit(nopython=True, parallel=True, nogil=True, fastmath=True)
 def _random_walk(weights, indptr, dst,
