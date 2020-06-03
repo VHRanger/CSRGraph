@@ -85,6 +85,7 @@ class TestGraph(unittest.TestCase):
         G.normalize()
         G = cg.csrgraph(A, nodes)
         G.normalize()
+        G.random_walk_resample()
 
     def test_data_stealing(self):
         """normal ctor points to underlying passed data"""
