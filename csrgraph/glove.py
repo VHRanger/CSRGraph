@@ -6,8 +6,6 @@ import sklearn
 import tqdm
 import warnings
 
-rng = np.random.default_rng()
-
 @jit(nopython=True, nogil=True, fastmath=True)
 def _update_bgrad(b, bgrad, node, loss, learning_rate):
     """
