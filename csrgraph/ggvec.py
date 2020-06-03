@@ -6,8 +6,6 @@ import sklearn
 import tqdm
 import warnings
 
-rng = np.random.default_rng()
-
 @jit(nopython=True, nogil=True, fastmath=True)
 def _update_wgrad_clipped(learning_rate, loss, w1, w2):
     """same as above, clamped in unit sphere"""
