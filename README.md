@@ -9,7 +9,7 @@ By exploiting [CSR Sparse matrices](https://en.wikipedia.org/wiki/Sparse_matrix#
 
 # Accessing the underlying matrix
 
-```
+```python
 import csrgraph as cg
 
 G = cg.csrgraph(data)
