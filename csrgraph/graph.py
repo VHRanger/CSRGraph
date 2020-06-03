@@ -412,8 +412,8 @@ class csrgraph():
         TODO: add node2vec walk parameters
         """
         walks = self.random_walks(walklen=walklen, epochs=epochs)
-        elist = methods.walks_to_edgelist(walks)
-        return csrgraph._edgelist_to_graph(elist)
+        elist = random_walks.walks_to_edgelist(walks)
+        return methods._edgelist_to_graph(elist)
 
     #
     #
