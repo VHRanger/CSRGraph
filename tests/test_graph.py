@@ -7,8 +7,7 @@ from sklearn import cluster, manifold, metrics
 import unittest
 import warnings
 
-import csrgraph 
-from csrgraph.graph import CSRGraph
+import csrgraph as cg
 
 # This is a markov chain with an absorbing state
 # Over long enough, every walk ends stuck at node 1
@@ -41,7 +40,7 @@ disconnected_graph = sparse.csr_matrix(np.array([
     ], dtype=np.float32)
 )
 
-class TestGlove(unittest.TestCase):
+class TestGGVec(unittest.TestCase):
     def test_given_disjoint_graphs_embeddings_cluster(self):
         """
         Embedding disjoint subgraphs should cluster correctly
@@ -56,8 +55,8 @@ class TestGlove(unittest.TestCase):
             labels.append([i] * graph_size)
         labels = sum(labels, [])
         # Embed Graph and cluster around it
-        G = csrgraph.CSRGraph(G)
-        v = G.embeddings(
+        G = cg.csrgraph(G)
+        v = G.ggvec(
             n_components=4,
             tol=0.1,
             max_epoch=550,
@@ -82,16 +81,30 @@ class TestGraph(unittest.TestCase):
         wg = nx.generators.classic.wheel_graph(10)
         A = nx.adj_matrix(wg)
         nodes = list(map(str, list(wg)))
-        G = csrgraph.CSRGraph(wg)
+        G = cg.csrgraph(wg)
         G.normalize()
-        G = csrgraph.CSRGraph(A, nodes)
+        G = cg.csrgraph(A, nodes)
         G.normalize()
+
+    def test_data_stealing(self):
+        """normal ctor points to underlying passed data"""
+        wg = nx.generators.classic.wheel_graph(10)
+        A = sparse.csr_matrix(nx.adj_matrix(wg))
+        nodes = list(map(str, list(wg)))
+        G = cg.csrgraph(wg)
+        self.assertIs(G.src, G.mat.indptr)
+        self.assertIs(G.dst, G.mat.indices)
+        self.assertIs(G.weights, G.mat.data)
+        G = cg.csrgraph(A, nodenames=nodes, copy=False)
+        self.assertIs(G.src, A.indptr)
+        self.assertIs(G.dst, A.indices)
+        self.assertIs(G.weights, A.data)
 
     def test_row_normalizer(self):
         # Multiplying by a constant returns the same
-        test1 = CSRGraph(disconnected_graph * 3)
-        test2 = CSRGraph(absorbing_state_graph_2 * 6)
-        test3 = CSRGraph(absorbing_state_graph * 99)
+        test1 = cg.csrgraph(disconnected_graph * 3)
+        test2 = cg.csrgraph(absorbing_state_graph_2 * 6)
+        test3 = cg.csrgraph(absorbing_state_graph * 99)
         # Scipy.sparse uses np.matrix which throws warnings
         warnings.simplefilter("ignore", category=PendingDeprecationWarning)
         np.testing.assert_array_almost_equal(
@@ -109,7 +122,7 @@ class TestGraph(unittest.TestCase):
             absorbing_state_graph.toarray(),
             decimal=3
         )
-        testzeros = CSRGraph(np.array([
+        testzeros = cg.csrgraph(np.array([
                 [0,0,0,0,0,0], # all 0 row
                 [1,2,3,4,5,6],
                 [1,0,0,1,0,1],
@@ -127,11 +140,11 @@ class TestSparseUtilities(unittest.TestCase):
     Test graph embeddings sub methods
     """
     def test_given_disconnected_graph_walks_dont_cross(self):
-        walks1 = CSRGraph(disconnected_graph).random_walks(
+        walks1 = cg.csrgraph(disconnected_graph).random_walks(
             start_nodes=[0,1],
             walklen=10
         )
-        walks2 = CSRGraph(disconnected_graph).random_walks(
+        walks2 = cg.csrgraph(disconnected_graph).random_walks(
             start_nodes=[2,3,4],
             walklen=10
         )
@@ -148,7 +161,7 @@ class TestSparseUtilities(unittest.TestCase):
     def test_random_walk_uniform_dist(self):
         n_nodes = 15
         n_walklen = 100
-        fully_connected = CSRGraph(np.ones((n_nodes,n_nodes))).normalize()
+        fully_connected = cg.csrgraph(np.ones((n_nodes,n_nodes))).normalize()
         t1 = fully_connected.random_walks(
             walklen=n_walklen,
             epochs=10)
@@ -158,16 +171,16 @@ class TestSparseUtilities(unittest.TestCase):
 
     def test_given_absorbing_graph_walks_absorb(self):
         # Walks should be long enough to avoid flaky tests
-        walks1 = CSRGraph(absorbing_state_graph).random_walks(
+        walks1 = cg.csrgraph(absorbing_state_graph).random_walks(
             walklen=80
         )
-        walks2 = CSRGraph(absorbing_state_graph).random_walks(
+        walks2 = cg.csrgraph(absorbing_state_graph).random_walks(
             walklen=80
         )
-        walks3 = CSRGraph(absorbing_state_graph).random_walks(
+        walks3 = cg.csrgraph(absorbing_state_graph).random_walks(
             walklen=50, epochs=80
         )
-        walks4 = CSRGraph(absorbing_state_graph).random_walks(
+        walks4 = cg.csrgraph(absorbing_state_graph).random_walks(
             walklen=50, epochs=80
         )
         end_state1 = walks1[:, -1]
@@ -186,12 +199,12 @@ class TestSparseUtilities(unittest.TestCase):
         """
         force recompile with different # threads
         """
-        walks = CSRGraph(absorbing_state_graph, threads=3).random_walks(
+        walks = cg.csrgraph(absorbing_state_graph, threads=3).random_walks(
             walklen=50, 
             epochs=80
         )
         self.assertTrue(True, "Should get here without issues")
-        walks = CSRGraph(absorbing_state_graph, threads=0).random_walks(
+        walks = cg.csrgraph(absorbing_state_graph, threads=0).random_walks(
             walklen=50, 
             epochs=80
         )
@@ -203,14 +216,16 @@ class TestFileInput(unittest.TestCase):
     """
     def test_karate(self):
         fname = "./data/karate_edges.txt"
-        G = CSRGraph.read_edgelist(fname)
+        G = cg.read_edgelist(fname)
         m = G.mat.todense()
         df = pd.read_csv(fname, sep="\t", header=None)
         df.columns = ['src', 'dst']
         for i in range(len(df)):
             s = df.iloc[i].src
             d = df.iloc[i].dst
-            self.assertTrue(m[s-1, d-1] == 1)
+            if m[s-1, d-1] != 1:
+                raise ValueError(f"For src {s}, dst {d}, error {m}")
+                self.assertEqual(m[s-1, d-1], 1)
         # Only those edges are present
         self.assertTrue(m.sum() == 154)
 
@@ -227,7 +242,7 @@ class TestNodeWalks(unittest.TestCase):
         walklen=10
         fully_connected = np.ones((n_nodes,n_nodes))
         np.fill_diagonal(fully_connected, 0)
-        fully_connected = CSRGraph(fully_connected, threads=1).normalize()
+        fully_connected = cg.csrgraph(fully_connected, threads=1).normalize()
         t1 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
@@ -264,7 +279,7 @@ class TestNodeWalks(unittest.TestCase):
         walklen=10
         fully_connected = np.ones((n_nodes,n_nodes))
         np.fill_diagonal(fully_connected, 0)
-        fully_connected = CSRGraph(fully_connected, threads=1).normalize()
+        fully_connected = cg.csrgraph(fully_connected, threads=1).normalize()
         t1 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
@@ -307,7 +322,7 @@ class TestNodeWalks(unittest.TestCase):
         walklen=30
         fully_connected = np.ones((n_nodes,n_nodes))
         np.fill_diagonal(fully_connected, 0)
-        fully_connected = CSRGraph(fully_connected, threads=0).normalize()
+        fully_connected = cg.csrgraph(fully_connected, threads=0).normalize()
         t1 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
