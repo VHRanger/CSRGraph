@@ -1,17 +1,4 @@
 TODO:
-
------ PRE RELEASE CLEANUP -----
-
-readme updates
-	"Embedding large graphs"
-	"Embedding very large graphs (coming up!)"
-	Make it clear everything works on sparse matrices
-	NOTE that saving and loading model gensim format only thru node2vec for now
-	tie embedding methods & others to sparse matrix
-		class methods are just alias
-		Integrate CSG scipy routines
-		https://docs.scipy.org/doc/scipy/reference/sparse.csgraph.html
-
 Match paper performances
 
 Make gridsearch script
