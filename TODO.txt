@@ -1,15 +1,73 @@
 TODO:
 
-Add negative_sampling_ratio
+----- PRE RELEASE CLEANUP -----
 
-Using 1-level glove + matrix change
-	- PageRank based TF-IDF:
-		http://www.frankmcsherry.org/assets/COST.pdf
-		http://www.frankmcsherry.org/graph/scalability/cost/2015/01/15/COST.html
-	- Proof that PageRank weighing ~ node2vec?
+readme updates
+	"Embedding large graphs"
+	"Embedding very large graphs (coming up!)"
+	Make it clear everything works on sparse matrices
+	NOTE that saving and loading model gensim format only thru node2vec for now
+	tie embedding methods & others to sparse matrix
+		class methods are just alias
+		Integrate CSG scipy routines
+		https://docs.scipy.org/doc/scipy/reference/sparse.csgraph.html
 
-add link prediction
-	- Test others in KarateClub
+Match paper performances
+
+Make gridsearch script
+
+Run grid searches, write paper
+	----Write results up-----
+	Credit to https://github.com/xiangyue9607/BioNEV for link prediction original setup (this was heavily optimized)
+	### 2nd + Order is important for link prediction!!
+
+	Reconstructing graph with GLoVe + randomwalks ~= node2vec
+
+	(This is true for all first order methods, but large windows are required often)
+
+	### 2nd+ order is worse on other types of tasks
+
+	It reduces clustering score and label prediction
+
+	### 1st and second order are equivalent on random graphs
+
+	Social graphs structure is actually learned by deep order 
+
+	KarateClub graphs tend to perform poorly for 1st order methods
+
+
+	### This goes along with GraRep recommendations
+
+	in BioNEV : "A large value for link prediction tasks (e.g. 3, 4);a small value for node classification tasks (e.g.1, 2)" (p.9)
+
+	### Since GLoVe works on text
+
+	Then first-order is fine for words, as long as the skip-gram window is long (sentence)? How does this relate to BERT?
+	This makes sense because node (word) info rather than edge info matters more.
+
+	---> Investigate link b/w pagerank, GraRep && random walk stable state
+
+	TO READ:
+		- small world effect is a modern phenomenon
+		- Deep InfoMax
+		- Inductive Representation Learning on Large Graphs
+		- https://arxiv.org/pdf/1710.10321.pdf
+		- https://arxiv.org/pdf/1802.02896.pdf
+
+	Also read this https://transacl.org/ojs/index.php/tacl/article/viewFile/742/204
+
+	and this https://papers.nips.cc/paper/5477-neural-word-embedding-as-implicit-matrix-factorization.pdf
+
+Embed Twitter
+
+-------------
+
+Finish Up node names bullshit
+
+mmap support
+	read_edgelist --> mmaped src/dst/weights
+	Should be a different class (mmap_graph?)
+	all class methods use an array src/dst/weights API anyways
 
 ## TODO: make read_edgelist robust
 	--> Needs to factorize nodes and create a `name` map
@@ -18,13 +76,12 @@ add link prediction
 	- refactor to uint32 nodes
 	- Throw on huge graphs > 4B nodes
 
-## Edge Reordering // Graph Layout Optimizer
+## Edge Reordering
 	- Hilbert edge order
 		http://www.frankmcsherry.org/graph/scalability/cost/2015/01/15/COST.html
 	- Embedding edge order
-
-## Embed Twitter
-
+	- Reverse Cuthill-McKee ordering
+		https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csgraph.reverse_cuthill_mckee.html#scipy.sparse.csgraph.reverse_cuthill_mckee
 
 ## OpenCL
 	Example usage
