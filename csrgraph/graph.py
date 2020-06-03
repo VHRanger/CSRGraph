@@ -1,3 +1,4 @@
+from copy import deepcopy
 import gc
 import networkx as nx
 import numba
@@ -6,36 +7,47 @@ import numpy as np
 import os
 import pandas as pd
 from scipy import sparse
+from sklearn.decomposition import TruncatedSVD
 import time
 import warnings
 
-from csrgraph.methods import (_row_norm, _random_walk, _node2vec_walks)
-from csrgraph.glove import glove_by_edges
+from csrgraph.methods import _row_norm
+from csrgraph.random_walks import _random_walk, _node2vec_walks
+from csrgraph import methods, random_walks
+from csrgraph import ggvec, glove, grarep
 
-class CSRGraph():
+class csrgraph():
     """
     This top level python class either calls external JIT'ed methods
         or methods from the JIT'ed internal graph
     """
-    def __init__(self, data, nodenames=None, mmap=False, threads=0):
+    def __init__(self, data, nodenames=None, copy=True, threads=0):
         """
-        A class for large, possibly on-disk graphs.
+        A class for larger graphs.
+
+        NOTE: this class tends to "steal data" by default.
+            If you pass a numpy array/scipy matrix/csr graph
+            Chances are this object will point to the same instance of data
+
+        Parameters:
+        -------------------
 
         data : The graph data. Can be one of:
-
             **NetworkX Graph**
-
+            **Numpy dense matrix**
             **CSR Matrix**
-
             **(data, indices, indptr)**
-
-            **CSRGraph object
+            **CSRGraph object**
 
         nodenames (array of str or int) : Node names
             The position in this array should correspond with the node ID
             So if passing a CSR Matrix or raw data, it should be co-indexed
             with the matrix/raw data arrays
 
+        copy : bool
+            Wether to copy passed data to create new object
+            Default behavior is to point to underlying ctor passed data
+            For networkX graphs and numpy dense matrices we create a new object anyway
         threads : int
             number of threads to leverage for methods in this graph.
             WARNING: changes the numba environment variable to do it.
@@ -43,48 +55,53 @@ class CSRGraph():
             0 is numba default (usually all threads)
 
         TODO: add numpy mmap support for very large on-disk graphs
-            This also requires routines to read/write
-            edgelists, etc. from disk
+            Should be in a different class
+            This also requires routines to read/write edgelists, etc. from disk
+        
+        TODO: subclass scipy.csr_matrix
         """
-        # If input is a CSRGraph, copy
-        if isinstance(data, CSRGraph):
-            self.weights = data.weights
-            self.src = data.src
-            self.dst = data.dst
-            try:
+        # If input is a CSRGraph, same object
+        if isinstance(data, csrgraph):
+            if copy:
+                self.mat = data.mat.copy()
+                self.names = deepcopy(data.names)
+            else:
                 self.mat = data.mat
-            except AttributeError:
-                pass
+                self.names = data.names
+            if not nodenames:
+                nodenames = self.names
+            else:
+                self.names = nodenames
         # NetworkX Graph input
         elif isinstance(data, nx.Graph):
-            self.mat = nx.adj_matrix(data)
+            mat = nx.adj_matrix(data)
+            mat.data = mat.data.astype(np.float32)
+            self.mat = mat
             nodenames = list(data)
-            # TODO: test
             if np.array_equal(range(len(data)), nodenames):
                 nodenames = None
         # CSR Matrix Input
         elif isinstance(data, sparse.csr_matrix):
-            self.mat = data
+            if copy: self.mat = data.copy()
+            else: self.mat = data
         # Numpy Array Input
         elif isinstance(data, np.ndarray):
             self.mat = sparse.csr_matrix(data)
         else:
             raise ValueError(f"Incorrect input data type: {type(data).__name__}")
-        if hasattr(self, 'mat'):
-            # edge weights. Coindexed to dst
-            # TODO: don't store data if it's all 1's
-            self.weights = self.mat.data
-            # start index of the edges for a node
-            # indexes into data and dst
-            self.src = self.mat.indptr
-            # edge destinations
-            self.dst = self.mat.indices
+        # Now that we have the core csr_matrix, alias underlying arrays
+        assert hasattr(self, 'mat')
+        self.weights = self.mat.data
+        self.src = self.mat.indptr
+        self.dst = self.mat.indices
+        # indptr has one more element than nnodes
+        self.nnodes = self.src.size - 1
         # node name -> node ID
         if nodenames is not None:
             self.names = dict(zip(nodenames, np.arange(self.dst.size)))
-        # indptr has one more element than nnodes
-        self.nnodes = self.src.size - 1
-        # Bounds check once otherwise there be dragons
+        else:
+            self.names = None
+        # Bounds check once here otherwise there be dragons later
         max_idx = np.max(self.dst)
         if self.nnodes < max_idx:
             raise ValueError(f"""
@@ -107,20 +124,11 @@ class CSRGraph():
             _row_norm.recompile()
             _node2vec_walks.recompile()
 
-    def matrix(self):
-        """
-        Return's the graph's scipy sparse CSR matrix
-        """
-        if hasattr(self, 'mat'):
-            return self.mat
-        else:
-            return sparse.csr_matrix((weights, dst, src))
-
     def nodes(self):
         """
         Returns the graph's nodes, in order
         """
-        if hasattr(self, 'names'):
+        if self.names:
             return self.names.keys()
         else:
             return np.arange(self.nnodes)
@@ -142,7 +150,7 @@ class CSRGraph():
                 self.mat=sparse.csr_matrix((self.weights, self.dst, self.src))
             return self
         else:
-            return CSRGraph(sparse.csr_matrix(
+            return csrgraph(sparse.csr_matrix(
                 (new_weights, self.dst, self.src)))
 
     def random_walks(self,
@@ -211,92 +219,260 @@ class CSRGraph():
                                  sampling_nodes, walklen)
         return walks
 
-
-    def embeddings(self, n_components=2,
-                   learning_rate=0.05, max_loss=10.,
-                   tol="auto", tol_samples=10,
-                   max_epoch=500,
-                   verbose=True):
+    def ggvec(self, n_components=2,
+              learning_rate=0.05,
+              tol="auto",
+              max_epoch=500,
+              negative_ratio=1.0,
+              order=1,
+              negative_decay=0.,
+              exponent=0.5,
+              max_loss=30.,
+              tol_samples=100,
+              verbose=True):
         """
-        Create embeddings using pseudo-GLoVe
+        GGVec: Fast global first (and higher) order local embeddings.
 
-        TODO: explore if single w vector works as well
-            GLoVe uses two matrices..?
+        This algorithm directly minimizes related nodes' distances.
+        It uses a relaxation pass (negative sample) + contraction pass (loss minimization)
+        To find stable embeddings based on the minimal dot product of edge weights.
+
+        Parameters:
+        -------------
+        n_components (int): 
+            Number of individual embedding dimensions.
+        order : int >= 1
+            Meta-level of the embeddings. Improves link prediction performance.
+            Setting this higher than 1 ~quadratically slows down algorithm
+                Order = 1 directly optimizes the graph.
+                Order = 2 optimizes graph plus 2nd order edges
+                    (eg. neighbours of neighbours)
+                Order = 3 optimizes up to 3rd order edges
+            Higher order edges are automatically weighed using GraRep-style graph formation
+            Eg. the higher-order graph is from stable high-order random walk distribution.
+        negative_ratio : float in [0, 1]
+            Negative sampling ratio.
+            Setting this higher will do more negative sampling.
+            This is slower, but can lead to higher quality embeddings.
+        exponent : float
+            Weighing exponent in loss function. 
+            Having this lower reduces effect of large edge weights.
+        tol : float in [0, 1] or "auto"
+            Optimization early stopping criterion.
+            Stops average loss < tol for tol_samples epochs.
+            "auto" sets tol as a function of learning_rate
+        tol_samples : int
+            Optimization early stopping criterion.
+            This is the number of epochs to sample for loss stability.
+            Once loss is stable over this number of epochs we stop early.
+        negative_decay : float in [0, 1]
+            Decay on negative ratio.
+            If >0 then negative ratio will decay by (1-negative_decay) ** epoch
+            You should usually leave this to 0.
+        max_epoch : int
+            Stopping criterion.
+        max_count : int
+            Ceiling value on edge weights for numerical stability
+        learning_rate : float in [0, 1]
+            Optimization learning rate.
+        max_loss : float
+            Loss value ceiling for numerical stability.
         """
-        # Fast impl for undirected, unweighed graphs
-        # TODO: Could be done on GPU?
         if tol == 'auto':
-            tol = max(learning_rate / 2, 0.02)
-        w = glove_by_edges(self.weights, self.dst, self.src,
-                           n_components, tol=tol, tol_samples=tol_samples,
-                           max_epoch=max_epoch, learning_rate=learning_rate, 
+            tol = max(learning_rate / 2, 0.05)
+        # Higher order graph embeddings
+        # Method inspired by GraRep (powers of transition matrix)
+        if order > 1:
+            norm_weights = _row_norm(self.weights, self.src)
+            tranmat = sparse.csr_matrix((norm_weights, self.dst, self.src))
+            target_matrix = tranmat.copy()
+            res = np.zeros((self.nnodes, n_components))
+            for _ in range(order - 1):
+                target_matrix = target_matrix.dot(tranmat)
+                w = ggvec.ggvec_main(
+                    data=target_matrix.data, 
+                    src=target_matrix.indptr, 
+                    dst=target_matrix.indices,
+                    n_components=n_components, tol=tol,
+                    tol_samples=tol_samples,
+                    max_epoch=max_epoch, learning_rate=learning_rate, 
+                    negative_ratio=negative_ratio,
+                    negative_decay=negative_decay,
+                    exponent=exponent,
+                    max_loss=max_loss, verbose=verbose)
+                res = np.sum([res, w], axis=0)
+            return res
+        else:
+            return ggvec.ggvec_main(
+                data=self.weights, src=self.src, dst=self.dst,
+                n_components=n_components, tol=tol,
+                tol_samples=tol_samples,
+                max_epoch=max_epoch, learning_rate=learning_rate, 
+                negative_ratio=negative_ratio,
+                negative_decay=negative_decay,
+                exponent=exponent,
+                max_loss=max_loss, verbose=verbose)
+
+    def glove(self, n_components=2,
+              tol=0.0001, max_epoch=10_000, 
+              max_count=50, exponent=0.5,
+              learning_rate=0.1, max_loss=10.,
+              verbose=True):
+        """
+        Global first order embedding for positive, count-valued sparse matrices.
+
+        This algorithm is normally used in NLP on word co-occurence matrices.
+        The algorithm fails if any value in the sparse matrix < 1.
+        It is also a poor choice for matrices with homogeneous edge weights.
+
+        Parameters:
+        -------------
+        n_components (int): 
+            Number of individual embedding dimensions.
+        tol : float in [0, 1]
+            Optimization early stopping criterion.
+            Stops when largest gradient is < tol
+        max_epoch : int
+            Stopping criterion.
+        max_count : int
+            Ceiling value on edge weights for numerical stability
+        exponent : float
+            Weighing exponent in loss function. 
+            Having this lower reduces effect of large edge weights.
+        learning_rate : float in [0, 1]
+            Optimization learning rate.
+        max_loss : float
+            Loss value ceiling for numerical stability.
+
+        References:
+        -------------
+        Paper: https://nlp.stanford.edu/pubs/glove.pdf
+        Original implementation: https://github.com/stanfordnlp/GloVe/blob/master/src/glove.c
+        """
+        w = glove.glove_main(weights=self.weights, dst=self.dst, src=self.src,
+                           n_components=n_components, tol=tol,
+                           max_epoch=max_epoch, learning_rate=learning_rate,
+                           max_count=max_count, exponent=exponent,
                            max_loss=max_loss, verbose=verbose)
         return w
 
-    @staticmethod
-    def read_edgelist(f, sep="\t", header=None):
+    def grarep(self, n_components=2,
+               order=5,
+               embedder=TruncatedSVD(
+                    n_iter=10,
+                    random_state=42),
+                verbose=True):
+        """Implementation of GraRep: Embeddings of powers of the PMI matrix 
+            of the graph adj matrix.
+
+        NOTE: Unlike GGVec and GLoVe, this method returns a LIST OF EMBEDDINGS
+              (one per order). You can sum them, or take the last one for embedding.
+            Default pooling is to sum : 
+                `lambda x : np.sum(x, axis=0)`
+            You can also take only the highest order embedding:
+                `lambda x : x[-1]`
+            Etc.
+
+        Original paper: https://dl.acm.org/citation.cfm?id=2806512
+
+        Parameters : 
+        ----------------
+        n_components (int): 
+            Number of individual embedding dimensions.
+        order (int): 
+            Number of PMI matrix powers.
+            The performance degrades close to quadratically as a factor of this parameter.
+            Generally should be kept under 5.
+        embedder : (instance of sklearn API compatible model)
+            Should implement the `fit_transform` method: 
+                https://scikit-learn.org/stable/glossary.html#term-fit-transform
+            The model should also have `n_components` as a parameter
+            for number of resulting embedding dimensions. See:
+                https://scikit-learn.org/stable/modules/manifold.html#manifold
+            If not compatible, set resulting dimensions in the model instance directly
+        merger : function[list[array]] -> array
+            GraRep returns one embedding matrix per order.
+            This function reduces it to a single matrix.
         """
-        Creates a CSRGraph from an edgelist
+        w_array = grarep.grarep_main(weights=self.weights, dst=self.dst, src=self.src,
+                           n_components=n_components, order=order,
+                           embedder=embedder,verbose=verbose)
+        return w_array
 
-        f : str
-            Filename to read
-        sep : str
-            CSV-style separator. Eg. Use "," if comma separated
-        header : int or None
-            pandas read_csv parameter. Use if column names are present
-
-        Returns : CSRGraph
-
-        TODO: support pd.read_csv kwargs
-        TODO: Support node names
+    def random_walk_resample(self, walklen=4, epochs=30):
         """
-        elist = pd.read_csv(f, sep=sep, header=header)
-        if len(elist.columns) == 2:
-            elist.columns = ['src', 'dst']
-        elif len(elist.columns) == 3:
-            elist.columns = ['src', 'dst', 'weight']
-        else: 
-            raise ValueError(f"""
-                Invalid columns: {elist.columns}
-                Expected 2 (source, destination)
-                or 3 (source, destination, weight)
-            """)
-        elist.src = elist.src.astype(np.uint32)
-        elist.dst = elist.dst.astype(np.uint32)
-        elist = elist.sort_values(by='src').reset_index(drop=True)
-        dst = elist.dst.to_numpy() - 1
-        src = np.zeros(elist.src.nunique() + 1)
-        # Fill indptr array
-        src[0] = 0 # indices are where nodes start
-        elist['idx'] = elist.index
-        src[1:] = (
-            elist[['idx', 'src']]
-            # Max idx per node
-            .groupby('src')
-            .max()
-            # Reset to pd.Series
-            .reset_index(drop=True)
-            .astype(np.uint32)
-            .to_numpy()
-            .flatten()
-            # This gets last node
-            # We want next one (array start)
-            + 1
-        )
-        if 'weight' in elist.columns:
-            weights = elist.weights.astype(np.float)
-        else:
-            weights = np.ones(dst.shape[0])
-        # clean up temp data
-        elist = None
-        gc.collect()
-        return CSRGraph(
-            sparse.csr_matrix((weights, dst, src))
-        )
+        Create a new graph from random walk co-occurences.
+
+        First, we generate random walks on the graph
+        Then, any nodes appearing together in a walk get an edge
+        Edge weights are co-occurence counts.
+
+        Recommendation: many short walks > fewer long walks
+
+        TODO: add node2vec walk parameters
+        """
+        walks = self.random_walks(walklen=walklen, epochs=epochs)
+        elist = methods.walks_to_edgelist(walks)
+        return csrgraph._edgelist_to_graph(elist)
 
     #
     #
     # TODO: Organize Graph method here
     # Layout nodes by their 1d embedding's position
+    # Also layout by hilbert space filling curve
     #
     #
+
+def read_edgelist(f, sep="\t", header=None, **readcsvkwargs):
+    """
+    Creates a csrgraph from an edgelist
+
+    f : str
+        Filename to read
+    sep : str
+        CSV-style separator. Eg. Use "," if comma separated
+    header : int or None
+        pandas read_csv parameter. Use if column names are present
+    read_csv_kwargs : keyword arguments for pd.read_csv
+        Pass these kwargs as you would normally to pd.read_csv.
+    Returns : csrgraph
+    """
+    elist = pd.read_csv(f, sep=sep, header=header, **readcsvkwargs)
+    if len(elist.columns) == 2:
+        elist.columns = ['src', 'dst']
+    elif len(elist.columns) == 3:
+        elist.columns = ['src', 'dst', 'weight']
+    else: 
+        raise ValueError(f"""
+            Invalid columns: {elist.columns}
+            Expected 2 (source, destination)
+            or 3 (source, destination, weight)
+            Read File: {elist.head(5)}
+        """)
+    UINT_MAX = (2**32)-1
+    if (elist.src.max() >= UINT_MAX or elist.dst.max() >= UINT_MAX
+        or elist.src.min() < 0 or elist.dst.min() < 0):
+        raise ValueError(f"""
+            Invalid uint32 value in node IDs. Max/min :
+            SRC: {elist.src.max()}, {elist.src.min()}
+            DST: {elist.dst.max()}, {elist.dst.min()}
+        """)
+    elist.src = elist.src.astype(np.uint32)
+    elist.dst = elist.dst.astype(np.uint32)
+    elist.sort_values(by='src', inplace=True, ignore_index=True)
+    # If we need a mapping from weird names/IDs, fix it
+    allnodes = list(
+        set(elist.src.unique())
+        .union(set(elist.dst.unique())))
+    if not allnodes == list(range(len(allnodes))):
+        names = pd.Series(allnodes).astype('category')
+        name_dict = dict(zip(names, np.arange(len(names))))
+        elist.src = elist.src.map(name_dict)
+        elist.dst = elist.dst.map(name_dict)
+    else:
+        names = None
+    G = methods._edgelist_to_graph(elist, nodenames=names)
+    # clean up temp data
+    elist = None
+    gc.collect()
+    return G

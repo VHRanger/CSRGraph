@@ -1,3 +1,3 @@
 from csrgraph.version import __version__
-from csrgraph import graph
-from csrgraph.graph import CSRGraph
+from csrgraph import graph, random_walks
+from csrgraph.graph import csrgraph, read_edgelist
