@@ -98,7 +98,7 @@ class csrgraph():
         self.nnodes = self.src.size - 1
         # node name -> node ID
         if nodenames is not None:
-            self.names = dict(zip(nodenames, np.arange(self.dst.size)))
+            self.names = dict(zip(nodenames, np.arange(self.nnodes)))
         else:
             self.names = None
         # Bounds check once here otherwise there be dragons later
