@@ -2,9 +2,7 @@ TODO:
 
 self.names EVERYWHERE!
 
-Match paper performances
-
-Make gridsearch script
+Make sure the `nodes()` function works as expected for nodevectors downstream
 
 Run grid searches, write paper
 	----Write results up-----
