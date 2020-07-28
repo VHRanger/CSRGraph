@@ -230,6 +230,24 @@ class TestFileInput(unittest.TestCase):
         # Only those edges are present
         self.assertTrue(m.sum() == 154)
 
+    def test_largenumbererror(self):
+        fname = "./data/largenumbererror.csv"
+        G = cg.read_edgelist(fname, sep=',')
+        self.assertTrue(len(G.nodes()) == 4)
+        # These two have no edges
+        self.assertTrue(len(G[44444444444444]) == 0)
+        self.assertTrue(len(G[222222222222]) == 0)
+        # These two have one edge
+        self.assertTrue(len(G[333333333333333]) == 1)
+        self.assertTrue(len(G[1111111111111]) == 1)
+
+    def test_unfactored_edgelist(self):
+        fname = "./data/unfactored_edgelist.csv"
+        G = cg.read_edgelist(fname, sep=',')
+        # TODO: stub. Add an actual test here
+        self.assertTrue(True)
+
+
 class TestNodeWalks(unittest.TestCase):
     """
     Test that Node2Vec walks do as they should

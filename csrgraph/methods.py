@@ -12,8 +12,31 @@ from scipy import sparse
 
 import csrgraph as cg
 
+@jit(nopython=True, fastmath=True)
+def _update_src_array(target, src, cnt):
+    """
+    Submethod for _edgelist_to_graph
 
-def _edgelist_to_graph(elist, nodenames=None):
+    Fast way to build the src array from groupby result
+
+    Params:
+    ---------
+    target : np.array
+        The resulting csr src array we're building
+        Modified in place
+    src : np.array
+        The result of groupby operation
+        Counting each edge under that node
+    cnt : np.array
+        co-indexed to src above.
+        The edge count for each node
+    """
+    for i in range(src.shape[0]):
+        # Offset by one to add the number of nodes
+        # in the current node to the src total
+        target[src[i]+1:] += cnt[i]
+
+def _edgelist_to_graph(elist, nnodes, nodenames=None):
     """
     Assumptions:
         1) edgelist is sorted by source nodes
@@ -31,26 +54,21 @@ def _edgelist_to_graph(elist, nodenames=None):
     TODO: move to methods.py
     """
     dst = elist.dst.to_numpy()
-    src = np.zeros(elist.src.nunique() + 1)
+    src = np.zeros(nnodes + 1)
     # Now fill indptr array
     src[0] = 0 # each idx points to node start idx
     # Use a groupby -> maxvalue to fill indptr
     elist['idx'] = elist.index
-    src[1:] = (
-        elist[['idx', 'src']]
+    # Use a groupby -> maxvalue to fill indptr
+    elist['cnt'] = np.ones(elist.shape[0])
+    grp = (elist[['cnt', 'src']]
         # Max idx per node
         .groupby('src')
-        .max()
-        # Reset to pd.Series
-        .reset_index(drop=True)
-        .astype(np.uint32)
-        .to_numpy()
-        .flatten()
-        # This gets last node
-        # We want next one (array start)
-        + 1
+        .count()
+        .reset_index(drop=False)
     )
-    elist.drop(columns=['idx'], inplace=True)
+    _update_src_array(src, grp.src.to_numpy(), grp.cnt.to_numpy())
+    elist.drop(columns=['cnt'], inplace=True)
     if 'weight' in elist.columns:
         weights = elist[elist.columns[-1]].astype(np.float)
     else:

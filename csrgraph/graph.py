@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from copy import deepcopy
 import gc
 import networkx as nx
@@ -15,6 +16,8 @@ from csrgraph.methods import _row_norm
 from csrgraph.random_walks import _random_walk, _node2vec_walks
 from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep
+
+UINT32_MAX = (2**32)-1
 
 class csrgraph():
     """
@@ -58,7 +61,7 @@ class csrgraph():
             Should be in a different class
             This also requires routines to read/write edgelists, etc. from disk
         
-        TODO: subclass scipy.csr_matrix
+        TODO: subclass scipy.csr_matrix???
         """
         # If input is a CSRGraph, same object
         if isinstance(data, csrgraph):
@@ -98,7 +101,7 @@ class csrgraph():
         self.nnodes = self.src.size - 1
         # node name -> node ID
         if nodenames is not None:
-            self.names = dict(zip(nodenames, np.arange(self.nnodes)))
+            self.names = pd.Series(nodenames)
         else:
             self.names = None
         # Bounds check once here otherwise there be dragons later
@@ -124,12 +127,26 @@ class csrgraph():
             _row_norm.recompile()
             _node2vec_walks.recompile()
 
+    def __getitem__(self, node):
+        """
+        Bracket operator
+
+        Gets names of neighbor nodes
+        """
+        if self.names is not None:
+            node_id = self.names[self.names == node].index[0]
+        else:
+            node_id = node
+        edges = self.dst[self.src[node_id]:
+                         self.src[node_id+1]]
+        return self.names[edges].values
+
     def nodes(self):
         """
         Returns the graph's nodes, in order
         """
-        if self.names:
-            return self.names.keys()
+        if self.names is not None:
+            return self.names
         else:
             return np.arange(self.nnodes)
 
@@ -413,7 +430,8 @@ class csrgraph():
         """
         walks = self.random_walks(walklen=walklen, epochs=epochs)
         elist = random_walks.walks_to_edgelist(walks)
-        return methods._edgelist_to_graph(elist)
+        return methods._edgelist_to_graph(elist, nnodes=self.nnodes, 
+                                          nodenames=self.names)
 
     #
     #
@@ -437,6 +455,7 @@ def read_edgelist(f, sep="\t", header=None, **readcsvkwargs):
         Pass these kwargs as you would normally to pd.read_csv.
     Returns : csrgraph
     """
+    # Read in csv correctly to each column
     elist = pd.read_csv(f, sep=sep, header=header, **readcsvkwargs)
     if len(elist.columns) == 2:
         elist.columns = ['src', 'dst']
@@ -447,31 +466,31 @@ def read_edgelist(f, sep="\t", header=None, **readcsvkwargs):
             Invalid columns: {elist.columns}
             Expected 2 (source, destination)
             or 3 (source, destination, weight)
-            Read File: {elist.head(5)}
+            Read File: \n{elist.head(5)}
         """)
-    UINT_MAX = (2**32)-1
-    if (elist.src.max() >= UINT_MAX or elist.dst.max() >= UINT_MAX
-        or elist.src.min() < 0 or elist.dst.min() < 0):
+    if elist.src.min() < 0 or elist.dst.min() < 0:
         raise ValueError(f"""
             Invalid uint32 value in node IDs. Max/min :
             SRC: {elist.src.max()}, {elist.src.min()}
             DST: {elist.dst.max()}, {elist.dst.min()}
         """)
-    elist.src = elist.src.astype(np.uint32)
-    elist.dst = elist.dst.astype(np.uint32)
     elist.sort_values(by='src', inplace=True, ignore_index=True)
-    # If we need a mapping from weird names/IDs, fix it
+    # Create name mapping to normalize node IDs
     allnodes = list(
         set(elist.src.unique())
         .union(set(elist.dst.unique())))
-    if not allnodes == list(range(len(allnodes))):
-        names = pd.Series(allnodes).astype('category')
-        name_dict = dict(zip(names, np.arange(len(names))))
-        elist.src = elist.src.map(name_dict)
-        elist.dst = elist.dst.map(name_dict)
-    else:
-        names = None
-    G = methods._edgelist_to_graph(elist, nodenames=names)
+    # This factors all the unique nodes to unique IDs
+    names = (
+        np.array(
+        pd.Series(allnodes).astype('category')
+        .cat.categories
+    ))
+    name_dict = dict(zip(names, 
+                         np.arange(names.shape[0])))
+    elist.src = elist.src.map(name_dict).astype(np.uint32)
+    elist.dst = elist.dst.map(name_dict).astype(np.uint32)
+    nnodes = names.shape[0]
+    G = methods._edgelist_to_graph(elist, nnodes, nodenames=names)
     # clean up temp data
     elist = None
     gc.collect()

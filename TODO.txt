@@ -1,4 +1,7 @@
 TODO:
+
+self.names EVERYWHERE!
+
 Match paper performances
 
 Make gridsearch script
