@@ -12,8 +12,12 @@ from sklearn.decomposition import TruncatedSVD
 import time
 import warnings
 
-from csrgraph.methods import _row_norm
-from csrgraph.random_walks import _random_walk, _node2vec_walks
+from csrgraph.methods import (
+    _row_norm, _node_degrees, _src_multiply, _dst_multiply
+)
+from csrgraph.random_walks import (
+    _random_walk, _node2vec_walks
+)
 from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep
 
@@ -108,6 +112,11 @@ class csrgraph():
             raise ValueError(f"""
                 Out of bounds node: {max_idx}, nnodes: {self.nnodes}
             """)
+        self.set_threads(threads)
+
+
+    def set_threads(self, threads):
+        self.threads = threads
         # Manage threading through Numba hack
         if type(threads) is not int:
             raise ValueError("Threads argument must be an int!")
@@ -124,6 +133,10 @@ class csrgraph():
             _random_walk.recompile()
             _row_norm.recompile()
             _node2vec_walks.recompile()
+            _node_degrees.recompile()
+            _src_multiply.recompile()
+            _dst_multiply.recompile()
+
 
     def __getitem__(self, node):
         """
@@ -166,7 +179,8 @@ class csrgraph():
             return self
         else:
             return csrgraph(sparse.csr_matrix(
-                (new_weights, self.dst, self.src)))
+                (new_weights, self.dst, self.src)), 
+                nodenames=self.names)
 
     def random_walks(self,
                 walklen=10,
