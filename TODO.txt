@@ -1,6 +1,8 @@
 TODO:
 
 self.names EVERYWHERE!
+    Fix segfault in node2vec
+    Fix node2vec walk names mapping (should use csrgraphs natively)
 
 Make sure the `nodes()` function works as expected for nodevectors downstream
 
