@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="csrgraph",
-    version="0.1.18",
+    version="0.1.19",
     license='MIT',
     description='Fast python graphs',
     author='Matt Ranger',
