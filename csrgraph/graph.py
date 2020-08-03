@@ -81,8 +81,6 @@ class csrgraph():
             mat.data = mat.data.astype(np.float32)
             self.mat = mat
             nodenames = list(data)
-            if np.array_equal(range(len(data)), nodenames):
-                nodenames = None
         # CSR Matrix Input
         elif isinstance(data, sparse.csr_matrix):
             if copy: self.mat = data.copy()
