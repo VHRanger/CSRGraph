@@ -23,3 +23,7 @@ The rest of the `csrgraph` class is mainly around managing node names, ingesting
 # Installation
 
 `pip install csrgraph`
+
+# TODO: 
+
+- Add support for directed graphs
