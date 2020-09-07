@@ -51,18 +51,24 @@ def _random_walk(weights, indptr, dst,
             # Find row in csr indptr
             start = indptr[state]
             end = indptr[state+1]
-            # transition probabilities
-            p = weights[start:end]
-            # cumulative distribution of transition probabilities
-            cdf = np.cumsum(p)
-            # Random draw in [0, 1] for each row
-            # Choice is where random draw falls in cumulative distribution
-            draw = np.random.rand()
-            # Find where draw is in cdf
-            # Then use its index to update state
-            next_idx = np.searchsorted(cdf, draw)
-            # Winner points to the column index of the next node
-            state = dst[start + next_idx]
+            # If there are edges in the node, find next step
+            if start != end:
+              # transition probabilities
+              p = weights[start:end]
+              # cumulative distribution of transition probabilities
+              cdf = np.cumsum(p)
+              # Random draw in [0, 1] for each row
+              # Choice is where random draw falls in cumulative distribution
+              draw = np.random.rand()
+              # Find where draw is in cdf
+              # Then use its index to update state
+              next_idx = np.searchsorted(cdf, draw)
+              # Winner points to the column index of the next node
+              state = dst[start + next_idx]
+            # If there are no edges, this is the end of the walk
+            else:
+              res[i, k:] = state
+              break
         # Write final states
         res[i, -1] = state
     return res
