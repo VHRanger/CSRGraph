@@ -100,7 +100,7 @@ class csrgraph():
         self.src = self.mat.indptr
         self.dst = self.mat.indices
         # indptr has one more element than nnodes
-        self.nnodes = min(self.src.size - 1, self.dst.size)
+        self.nnodes = self.src.size - 1
         # node name -> node ID
         if nodenames is not None:
             self.names = pd.Series(nodenames)
