@@ -241,12 +241,37 @@ class TestFileInput(unittest.TestCase):
         self.assertTrue(len(G[333333333333333]) == 1)
         self.assertTrue(len(G[1111111111111]) == 1)
 
-    def test_unfactored_edgelist(self):
+    def test_unfactored_edgelist_directed(self):
         fname = "./data/unfactored_edgelist.csv"
         G = cg.read_edgelist(fname, sep=',')
-        # TODO: stub. Add an actual test here
-        self.assertTrue(True)
+        nxG = cg.csrgraph(
+            nx.read_edgelist(
+                fname, 
+                delimiter=',',
+                create_using=nx.DiGraph(),
+            )
+        )
+        self.assertEqual(G.src.size, nxG.src.size)
+        self.assertEqual(G.dst.size, nxG.dst.size)
+        self.assertEqual(G.weights.size, nxG.weights.size)
 
+    def test_unfactored_edgelist_undirected(self):
+        """
+        Undirected edgelist reading works
+        Even on disconnected graphs
+        """
+        fname = "./data/unfactored_edgelist.csv"
+        ### FIX FIX FIX ###
+        # G = cg.read_edgelist(fname, directed=False, sep=',')
+        nxG = cg.csrgraph(
+            nx.read_edgelist(
+                fname, 
+                delimiter=',',
+                create_using=nx.Graph(),
+            )
+        )
+        ### TODO: Add functionality && test ###
+        self.assertTrue(True)
 
 class TestNodeWalks(unittest.TestCase):
     """
