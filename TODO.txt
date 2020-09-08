@@ -1,5 +1,7 @@
 TODO:
 
+Harden n2v walks to dead end nodes like in regular random walks
+
 self.names EVERYWHERE!
     Fix segfault in node2vec
     Fix node2vec walk names mapping (should use csrgraphs natively)
