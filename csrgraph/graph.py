@@ -3,7 +3,7 @@ from copy import deepcopy
 import gc
 import networkx as nx
 import numba
-from numba import jit, jitclass
+from numba import jit
 import numpy as np
 import os
 import pandas as pd
