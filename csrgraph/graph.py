@@ -515,10 +515,10 @@ def read_edgelist(f, sep="\t", header=None, **readcsvkwargs):
         weights = elist.weight.to_numpy()
     else:
         weights = np.ones(dst.shape[0])
-    G = methods._edgelist_to_graph(
-        src, dst, weights, nnodes, nodenames=names
-    )
     # clean up temp data
     elist = None
     gc.collect()
+    G = methods._edgelist_to_graph(
+        src, dst, weights, nnodes, nodenames=names
+    )
     return G

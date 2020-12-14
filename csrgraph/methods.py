@@ -12,33 +12,6 @@ from scipy import sparse
 
 import csrgraph as cg
 
-@jit(nopython=True, fastmath=True)
-def _update_src_array(target, src, cnt):
-    """
-    Submethod for _edgelist_to_graph
-
-    Fast way to build the src array from groupby result
-
-    Params:
-    ---------
-    target : np.array
-        The resulting csr src array we're building
-        Modified in place
-    src : np.array
-        The result of groupby operation
-        Counting each edge under that node
-    cnt : np.array
-        co-indexed to src above.
-        The edge count for each node
-    """
-    for i in range(src.shape[0]):
-        # Offset by one to add the number of nodes
-        # in the current node to the src total
-        # TODO: Would be faster backwards...?
-        #       Start with the max value and reduce on each
-        #       Can be done with a cumsum as well
-        target[src[i]+1:] += cnt[i]
-
 def _edgelist_to_graph(src, dst, weights, nnodes, nodenames=None):
     """
     Assumptions:
@@ -55,9 +28,7 @@ def _edgelist_to_graph(src, dst, weights, nnodes, nodenames=None):
     """
     new_src = np.zeros(nnodes + 1)
     # Fill indptr array
-    new_src[0] = 0 # each idx points to node start idx
-    grp = np.unique(src, return_counts=True)
-    _update_src_array(new_src, grp[0], grp[1])
+    new_src[1:] = np.cumsum(np.bincount(src, minlength=nnodes))
     return cg.csrgraph(
         sparse.csr_matrix((weights, dst, new_src)),
         nodenames=nodenames
