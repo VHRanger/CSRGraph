@@ -442,8 +442,13 @@ class csrgraph():
         """
         walks = self.random_walks(walklen=walklen, epochs=epochs)
         elist = random_walks.walks_to_edgelist(walks)
-        return methods._edgelist_to_graph(elist, nnodes=self.nnodes, 
-                                          nodenames=self.names)
+        if 'weight' in elist.columns:
+            weights = elist.weight.to_numpy()
+        else:
+            weights = np.ones(dst.shape[0])
+        return methods._edgelist_to_graph(
+            elist.src.to_numpy(), elist.dst.to_numpy(), 
+            weights, nnodes=self.nnodes, nodenames=self.names)
 
     #
     #
@@ -499,10 +504,20 @@ def read_edgelist(f, sep="\t", header=None, **readcsvkwargs):
     ))
     name_dict = dict(zip(names, 
                          np.arange(names.shape[0])))
-    elist.src = elist.src.map(name_dict).astype(np.uint32)
-    elist.dst = elist.dst.map(name_dict).astype(np.uint32)
+    src = np.array(elist.src.map(name_dict), dtype=np.uint32)
+    dst = np.array(elist.dst.map(name_dict), dtype=np.uint32)
     nnodes = names.shape[0]
-    G = methods._edgelist_to_graph(elist, nnodes, nodenames=names)
+    #
+    # TODO: test weighed input graphs here more!!!
+    #       test int weights, float weights, etc.
+    #
+    if 'weight' in elist.columns:
+        weights = elist.weight.to_numpy()
+    else:
+        weights = np.ones(dst.shape[0])
+    G = methods._edgelist_to_graph(
+        src, dst, weights, nnodes, nodenames=names
+    )
     # clean up temp data
     elist = None
     gc.collect()

@@ -34,9 +34,12 @@ def _update_src_array(target, src, cnt):
     for i in range(src.shape[0]):
         # Offset by one to add the number of nodes
         # in the current node to the src total
+        # TODO: Would be faster backwards...?
+        #       Start with the max value and reduce on each
+        #       Can be done with a cumsum as well
         target[src[i]+1:] += cnt[i]
 
-def _edgelist_to_graph(elist, nnodes, nodenames=None):
+def _edgelist_to_graph(src, dst, weights, nnodes, nodenames=None):
     """
     Assumptions:
         1) edgelist is sorted by source nodes
@@ -46,35 +49,17 @@ def _edgelist_to_graph(elist, nnodes, nodenames=None):
     elist : pd.Dataframe[src, dst, (weight)]
         df of edge pairs. Assumed to be sorted.
         If w weight column is present, named 'weight'
-
     Return:
     ----------
     csrgraph object 
-
-    TODO: move to methods.py
     """
-    dst = elist.dst.to_numpy()
-    src = np.zeros(nnodes + 1)
-    # Now fill indptr array
-    src[0] = 0 # each idx points to node start idx
-    # Use a groupby -> maxvalue to fill indptr
-    elist['idx'] = elist.index
-    # Use a groupby -> maxvalue to fill indptr
-    elist['cnt'] = np.ones(elist.shape[0])
-    grp = (elist[['cnt', 'src']]
-        # Max idx per node
-        .groupby('src')
-        .count()
-        .reset_index(drop=False)
-    )
-    _update_src_array(src, grp.src.to_numpy(), grp.cnt.to_numpy())
-    elist.drop(columns=['cnt'], inplace=True)
-    if 'weight' in elist.columns:
-        weights = elist[elist.columns[-1]].astype(np.float)
-    else:
-        weights = np.ones(dst.shape[0])
+    new_src = np.zeros(nnodes + 1)
+    # Fill indptr array
+    new_src[0] = 0 # each idx points to node start idx
+    grp = np.unique(src, return_counts=True)
+    _update_src_array(new_src, grp[0], grp[1])
     return cg.csrgraph(
-        sparse.csr_matrix((weights, dst, src)),
+        sparse.csr_matrix((weights, dst, new_src)),
         nodenames=nodenames
     )
 
