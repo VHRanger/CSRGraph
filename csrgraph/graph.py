@@ -458,7 +458,7 @@ class csrgraph():
     #
     #
 
-def read_edgelist(f, sep="\t", header=None, **readcsvkwargs):
+def read_edgelist(f, directed=True, sep="\t", header=None, **readcsvkwargs):
     """
     Creates a csrgraph from an edgelist
 
@@ -485,13 +485,6 @@ def read_edgelist(f, sep="\t", header=None, **readcsvkwargs):
             or 3 (source, destination, weight)
             Read File: \n{elist.head(5)}
         """)
-    if elist.src.min() < 0 or elist.dst.min() < 0:
-        raise ValueError(f"""
-            Invalid uint32 value in node IDs. Max/min :
-            SRC: {elist.src.max()}, {elist.src.min()}
-            DST: {elist.dst.max()}, {elist.dst.min()}
-        """)
-    elist.sort_values(by='src', inplace=True, ignore_index=True)
     # Create name mapping to normalize node IDs
     allnodes = list(
         set(elist.src.unique())
@@ -517,7 +510,16 @@ def read_edgelist(f, sep="\t", header=None, **readcsvkwargs):
         weights = np.ones(dst.shape[0])
     # clean up temp data
     elist = None
+    allnodes = None
+    name_dict = None
     gc.collect()
+    # If undirected graph, append edgelist to reversed self
+    if not directed:
+        src = np.concatenate([src, dst])
+        # since we overwrote src, we pick original one from dst's shape
+        dst = np.concatenate([dst, src[:-dst.shape[0]]])
+        weights = np.concatenate([weights, weights])
+        gc.collect()
     G = methods._edgelist_to_graph(
         src, dst, weights, nnodes, nodenames=names
     )

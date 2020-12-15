@@ -243,7 +243,7 @@ class TestFileInput(unittest.TestCase):
 
     def test_unfactored_edgelist_directed(self):
         fname = "./data/unfactored_edgelist.csv"
-        G = cg.read_edgelist(fname, sep=',')
+        G = cg.read_edgelist(fname, directed=True, sep=',')
         nxG = cg.csrgraph(
             nx.read_edgelist(
                 fname, 
@@ -265,24 +265,35 @@ class TestFileInput(unittest.TestCase):
         for i in range(1, 10):
             self.assertEqual(np.quantile(Gdiff, i / 10), np.quantile(nxGdiff, i / 10))
 
+    def test_unfactored_edgelist_undirected(self):
+        """
+        Undirected edgelist reading works
+        Even on disconnected graphs
+        """
+        fname = "./data/unfactored_edgelist.csv"
+        ### FIX FIX FIX ###
+        G = cg.read_edgelist(fname, directed=False, sep=',')
+        nxG = cg.csrgraph(
+            nx.read_edgelist(
+                fname, 
+                delimiter=',',
+                create_using=nx.Graph(),
+            )
+        )
+        self.assertEqual(G.src.size, nxG.src.size)
+        self.assertEqual(G.dst.size, nxG.dst.size)
+        self.assertEqual(G.weights.size, nxG.weights.size)
+        self.assertEqual(G.weights.sum(), nxG.weights.sum())
+        # The number of edges on source nodes should have same statistics
+        Gdiff = np.diff(G.src)
+        nxGdiff = np.diff(nxG.src)
+        self.assertEqual(int(Gdiff.mean() * 1000), int(nxGdiff.mean() * 1000))
+        self.assertEqual(int(Gdiff.std() * 1000), int(nxGdiff.std() * 1000))
+        self.assertEqual(Gdiff.min(), nxGdiff.min())
+        self.assertEqual(Gdiff.max(), nxGdiff.max())
+        for i in range(1, 10):
+            self.assertEqual(np.quantile(Gdiff, i / 10), np.quantile(nxGdiff, i / 10))
 
-    ### TODO: Add functionality && test ###
-    # def test_unfactored_edgelist_undirected(self):
-    #     """
-    #     Undirected edgelist reading works
-    #     Even on disconnected graphs
-    #     """
-    #     fname = "./data/unfactored_edgelist.csv"
-    #     ### FIX FIX FIX ###
-    #     G = cg.read_edgelist(fname, directed=False, sep=',')
-    #     nxG = cg.csrgraph(
-    #         nx.read_edgelist(
-    #             fname, 
-    #             delimiter=',',
-    #             create_using=nx.Graph(),
-    #         )
-    #     )
-    #     self.assertTrue(True)
 
 class TestNodeWalks(unittest.TestCase):
     """
