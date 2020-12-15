@@ -61,22 +61,9 @@ mmap support
 	Should be a different class (mmap_graph?)
 	all class methods use an array src/dst/weights API anyways
 
-## TODO: make read_edgelist robust
-	--> Needs to factorize nodes and create a `name` map
-
-## Check memory usage
-	- refactor to uint32 nodes
-	- Throw on huge graphs > 4B nodes
-
 ## Edge Reordering
 	- Hilbert edge order
 		http://www.frankmcsherry.org/graph/scalability/cost/2015/01/15/COST.html
 	- Embedding edge order
 	- Reverse Cuthill-McKee ordering
 		https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csgraph.reverse_cuthill_mckee.html#scipy.sparse.csgraph.reverse_cuthill_mckee
-
-## OpenCL
-	Example usage
-	https://gist.github.com/ezietsman/226473
-	PyOpenCL
-	https://documen.tician.de/pyopencl/
