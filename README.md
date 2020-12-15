@@ -17,11 +17,10 @@ You can read a graph from an **edgelist**:
 
 ```python
 import csrgraph as cg
-import nodevectors
 
 G = cg.read_edgelist("path_to_file.csv", directed=False, sep=',')
-ggvec_model = nodevectors.GGVec() 
-embeddings = ggvec_model.fit_transform(G)
+# Node names are stored and accessible
+G['cat']
 ```
 
 Other objects that can be put in the csrgraph constructor:
