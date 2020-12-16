@@ -48,7 +48,7 @@ All the procedures in scipy `csgraph` module [here](https://docs.scipy.org/doc/s
 
 # Gotchas
 
-**All graphs are directed**. We support undirected graphs by adding "return edges" on each edge. You'll find CSRGraph's efficient memory use and fast methods makes up for this design.
+**All graphs are directed**. We support undirected graphs by adding "return edges" on each edge. The only issue is that this doubles the number of edges. You'll generally find CSRGraph's efficient memory use and fast methods makes up for this design.
 
 **4.2B Node limit**. You can't currently have more nodes than `UINT32_MAX` (around 4.2billion) -- you'll run out of node IDs. You can have as many edges as will fit in RAM however.
 
