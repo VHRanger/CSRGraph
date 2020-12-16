@@ -486,6 +486,7 @@ def read_edgelist(f, directed=True, sep="\t", header=None, **readcsvkwargs):
             Read File: \n{elist.head(5)}
         """)
     # Create name mapping to normalize node IDs
+    # Somehow this is 1.5x faster than np.union1d. Shame on numpy.
     allnodes = list(
         set(elist.src.unique())
         .union(set(elist.dst.unique())))
