@@ -1,9 +1,11 @@
+import io
 import networkx as nx
 import numpy as np
 import pandas as pd
 import random
 from scipy import sparse
 from sklearn import cluster, manifold, metrics
+import string
 import unittest
 import warnings
 
@@ -229,6 +231,59 @@ class TestFileInput(unittest.TestCase):
                 self.assertEqual(m[s-1, d-1], 1)
         # Only those edges are present
         self.assertTrue(m.sum() == 154)
+
+    def test_string_karate(self):
+        N_NODES = 35
+        STR_LEN = 10
+        fname = "./data/karate_edges.txt"
+        df = pd.read_csv(fname, sep="\t", header=None)
+        # string node names for each node ID
+        new_names = [
+            ''.join(random.choice(string.ascii_uppercase) 
+                    for _ in range(STR_LEN))
+            for i in range(N_NODES)
+        ]
+        # Map node ID -> new node name
+        name_dict = dict(zip(np.arange(N_NODES), new_names))
+        for c in df.columns:
+            df[c] = df[c].map(name_dict)
+        # Pass this new data to read_edgelist
+        data = io.StringIO(df.to_csv(index=False, header=False))
+        G = cg.read_edgelist(data, sep=',')
+        # re-read original graph
+        df2 = pd.read_csv(fname, sep="\t", header=None)
+        # re-map IDs to string node names
+        for c in df2.columns:
+            df2[c] = df2[c].map(name_dict)
+        df2.columns = ['src', 'dst']
+        for i in range(len(df2)):
+            s = df2.iloc[i].src
+            d = df2.iloc[i].dst
+            # addressing graph by __getitem__ with str
+            # should return list of str node names
+            self.assertTrue(d in G[s])
+        # Only those edges are present
+        m = G.mat.todense()
+        self.assertTrue(m.sum() == 154)
+
+    def test_float_weights_reading(self):
+        fname = "./data/karate_edges.txt"
+        df = pd.read_csv(fname, sep="\t", header=None)
+        df['weights'] = np.random.rand(df.shape[0])
+        data = io.StringIO(df.to_csv(index=False, header=False))
+        G = cg.read_edgelist(data, sep=',')
+        self.assertTrue((G.weights < 1).all())
+        self.assertTrue((G.weights > 0).all())
+
+    def test_int_weights_reading(self):
+        WEIGHT_VALUE = 5
+        fname = "./data/karate_edges.txt"
+        df = pd.read_csv(fname, sep="\t", header=None)
+        df['weights'] = np.ones(df.shape[0]) * WEIGHT_VALUE
+        data = io.StringIO(df.to_csv(index=False, header=False))
+        G = cg.read_edgelist(data, sep=',')
+        self.assertTrue((G.weights == WEIGHT_VALUE).all())
+        self.assertTrue((G.weights == WEIGHT_VALUE).all())
 
     def test_largenumbererror(self):
         fname = "./data/largenumbererror.csv"

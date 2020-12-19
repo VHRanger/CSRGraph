@@ -1,5 +1,7 @@
 TODO:
 
+Add GGVec negative_lr_ratio parameter
+
 Harden n2v walks to dead end nodes like in regular random walks
 
 self.names EVERYWHERE!
@@ -27,7 +29,6 @@ Run grid searches, write paper
 
 	KarateClub graphs tend to perform poorly for 1st order methods
 
-
 	### This goes along with GraRep recommendations
 
 	in BioNEV : "A large value for link prediction tasks (e.g. 3, 4);a small value for node classification tasks (e.g.1, 2)" (p.9)
@@ -53,8 +54,6 @@ Run grid searches, write paper
 Embed Twitter
 
 -------------
-
-Finish Up node names bullshit
 
 mmap support
 	read_edgelist --> mmaped src/dst/weights

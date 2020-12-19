@@ -21,7 +21,7 @@ from csrgraph.random_walks import (
 from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep
 
-UINT32_MAX = (2**32)-1
+UINT32_MAX = (2**32) - 1
 
 class csrgraph():
     """
@@ -105,7 +105,7 @@ class csrgraph():
         if nodenames is not None:
             self.names = pd.Series(nodenames)
         else:
-            self.names = None
+            self.names = pd.Series(np.arange(self.nnodes))
         # Bounds check once here otherwise there be dragons later
         max_idx = np.max(self.dst)
         if self.nnodes < max_idx:
@@ -137,20 +137,20 @@ class csrgraph():
             _src_multiply.recompile()
             _dst_multiply.recompile()
 
-
     def __getitem__(self, node):
         """
-        Bracket operator
-
-        Gets names of neighbor nodes
+        [] operator
+        like networkX, gets names of neighbor nodes
         """
-        if self.names is not None:
-            node_id = self.names[self.names == node].index[0]
-        else:
-            node_id = node
-        edges = self.dst[self.src[node_id]:
-                         self.src[node_id+1]]
-        return self.names[edges].values
+        # Get node ID from names array
+        # This is O(n) by design -- we more often get names from IDs
+        #    than we get IDs from names and we don't want to hold 2 maps
+        # TODO : replace names with a pd.Index and use get_loc
+        node_id = self.names[self.names == node].index[0]
+        edges = self.dst[
+            self.src[node_id] : self.src[node_id+1]
+        ]
+        return self.names.iloc[edges].values
 
     def nodes(self):
         """
@@ -173,9 +173,12 @@ class csrgraph():
         """
         new_weights = _row_norm(self.weights, self.src)
         if return_self:
-            self.weights = new_weights
-            if hasattr(self, 'mat'):
-                self.mat=sparse.csr_matrix((self.weights, self.dst, self.src))
+            self.mat = sparse.csr_matrix((new_weights, self.dst, self.src))
+            # Point objects to the correct places
+            self.weights = self.mat.data
+            self.src = self.mat.indptr
+            self.dst = self.mat.indices
+            gc.collect()
             return self
         else:
             return csrgraph(sparse.csr_matrix(
@@ -458,12 +461,25 @@ class csrgraph():
     #
     #
 
-def read_edgelist(f, directed=True, sep="\t", header=None, **readcsvkwargs):
+def read_edgelist(f, directed=True, sep=r"\s+", header=None, **readcsvkwargs):
     """
-    Creates a csrgraph from an edgelist
+    Creates a csrgraph from an edgelist.
+
+    The edgelist should be in the form 
+       [source  destination]
+        or 
+       [source  destination  edge_weight]
+
+    The first column needs to be the source, the second the destination.
+    If there is a third column it's assumed to be edge weights.
+
+    Otherwise, all arguments from pandas.read_csv can be used to read the file.
 
     f : str
         Filename to read
+    directed : bool
+        Whether the graph is directed or undirected.
+        All csrgraphs are directed, undirected graphs simply add "return edges"
     sep : str
         CSV-style separator. Eg. Use "," if comma separated
     header : int or None
@@ -476,6 +492,7 @@ def read_edgelist(f, directed=True, sep="\t", header=None, **readcsvkwargs):
     elist = pd.read_csv(f, sep=sep, header=header, **readcsvkwargs)
     if len(elist.columns) == 2:
         elist.columns = ['src', 'dst']
+        elist['weight'] = np.ones(elist.shape[0])
     elif len(elist.columns) == 3:
         elist.columns = ['src', 'dst', 'weight']
     else: 
@@ -490,38 +507,42 @@ def read_edgelist(f, directed=True, sep="\t", header=None, **readcsvkwargs):
     allnodes = list(
         set(elist.src.unique())
         .union(set(elist.dst.unique())))
-    # This factors all the unique nodes to unique IDs
+    # Factor all nodes to unique IDs
     names = (
-        np.array(
         pd.Series(allnodes).astype('category')
         .cat.categories
-    ))
-    name_dict = dict(zip(names, 
-                         np.arange(names.shape[0])))
-    src = np.array(elist.src.map(name_dict), dtype=np.uint32)
-    dst = np.array(elist.dst.map(name_dict), dtype=np.uint32)
+    )
     nnodes = names.shape[0]
-    #
-    # TODO: test weighed input graphs here more!!!
-    #       test int weights, float weights, etc.
-    #
-    if 'weight' in elist.columns:
-        weights = elist.weight.to_numpy()
+    # Get the input data type
+    if nnodes > UINT32_MAX:
+        dtype = np.uint64
     else:
-        weights = np.ones(dst.shape[0])
+        dtype = np.uint32
+    name_dict = dict(zip(names,
+                         np.arange(names.shape[0], dtype=dtype)))
+    elist.src = elist.src.map(name_dict)
+    elist.dst = elist.dst.map(name_dict)
     # clean up temp data
-    elist = None
     allnodes = None
     name_dict = None
     gc.collect()
     # If undirected graph, append edgelist to reversed self
     if not directed:
-        src = np.concatenate([src, dst])
-        # since we overwrote src, we pick original one from dst's shape
-        dst = np.concatenate([dst, src[:-dst.shape[0]]])
-        weights = np.concatenate([weights, weights])
+        other_df = elist.copy()
+        other_df.columns = ['dst', 'src', 'weight']
+        elist = pd.concat([elist, other_df])
+        other_df = None
         gc.collect()
+    # Need to sort by src for _edgelist_to_graph
+    elist = elist.sort_values(by='src')
+    # extract numpy arrays and clear memory
+    src = elist.src.to_numpy()
+    dst = elist.dst.to_numpy()
+    weight = elist.weight.to_numpy()
+    elist = None
+    gc.collect()
     G = methods._edgelist_to_graph(
-        src, dst, weights, nnodes, nodenames=names
+        src, dst, weight,
+        nnodes, nodenames=names
     )
     return G
