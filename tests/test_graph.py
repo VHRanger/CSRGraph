@@ -450,6 +450,16 @@ class TestNodeWalks(unittest.TestCase):
             return_weight=0.5,
             neighbor_weight=1.5)
 
+    def test_n2v_bounds(self):
+        """
+        Bug on node2vec random walks being segfault/out-of-bounds
+        Should be fixed forever
+        """
+        G = cg.read_edgelist("./data/wiki_edgelist.txt")
+        rw = G.random_walks(return_weight=0.2)
+        self.assertEqual(int(G.nodes().max()), rw.max())
+        self.assertEqual(int(G.nodes().min()), rw.min())
+
 
 if __name__ == '__main__':
     unittest.main()

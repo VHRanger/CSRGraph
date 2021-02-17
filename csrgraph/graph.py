@@ -80,7 +80,7 @@ class csrgraph():
             else:
                 self.names = nodenames
         # NetworkX Graph input
-        elif isinstance(data, nx.Graph):
+        elif isinstance(data, (nx.Graph, nx.DiGraph)):
             mat = nx.adj_matrix(data)
             mat.data = mat.data.astype(np.float32)
             self.mat = mat

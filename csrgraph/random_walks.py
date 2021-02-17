@@ -188,8 +188,9 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
                 return_weight, neighbor_weight
             )
         # Write final states
-        res[i, k] = state
+        res[i, -1] = state
     return res
+
 
 @jit(nopython=True)
 def graph_from_walks_inner(walks):
