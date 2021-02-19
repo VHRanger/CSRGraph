@@ -489,7 +489,7 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, **readcsvkwargs):
     Returns : csrgraph
     """
     # Read in csv correctly to each column
-    elist = pd.read_csv(f, sep=sep, header=header, **readcsvkwargs)
+    elist = pd.read_csv(f, sep=sep, header=header, keep_default_na=False, **readcsvkwargs)
     if len(elist.columns) == 2:
         elist.columns = ['src', 'dst']
         elist['weight'] = np.ones(elist.shape[0])
