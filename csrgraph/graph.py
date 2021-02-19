@@ -461,7 +461,7 @@ class csrgraph():
     #
     #
 
-def read_edgelist(f, directed=True, sep=r"\s+", header=None, **readcsvkwargs):
+def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=False, **readcsvkwargs):
     """
     Creates a csrgraph from an edgelist.
 
@@ -484,12 +484,14 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, **readcsvkwargs):
         CSV-style separator. Eg. Use "," if comma separated
     header : int or None
         pandas read_csv parameter. Use if column names are present
+    keep_default_na: bool
+        pandas read_csv argument to prevent casting any value to NaN
     read_csv_kwargs : keyword arguments for pd.read_csv
         Pass these kwargs as you would normally to pd.read_csv.
     Returns : csrgraph
     """
     # Read in csv correctly to each column
-    elist = pd.read_csv(f, sep=sep, header=header, **readcsvkwargs)
+    elist = pd.read_csv(f, sep=sep, header=header, keep_default_na=keep_default_na, **readcsvkwargs)
     if len(elist.columns) == 2:
         elist.columns = ['src', 'dst']
         elist['weight'] = np.ones(elist.shape[0])
