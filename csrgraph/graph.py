@@ -11,6 +11,8 @@ from scipy import sparse
 from sklearn.decomposition import TruncatedSVD
 import time
 import warnings
+import memory_profiler
+import sys
 
 from csrgraph.methods import (
     _row_norm, _node_degrees, _src_multiply, _dst_multiply
@@ -22,7 +24,7 @@ from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep
 
 UINT32_MAX = (2**32) - 1
-
+UINT16_MAX = (2**16) - 1
 class csrgraph():
     """
     This top level python class either calls external JIT'ed methods
@@ -504,6 +506,7 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
             or 3 (source, destination, weight)
             Read File: \n{elist.head(5)}
         """)
+    print('using modified csrgraph')
     # Create name mapping to normalize node IDs
     # Somehow this is 1.5x faster than np.union1d. Shame on numpy.
     allnodes = list(
@@ -518,12 +521,26 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
     # Get the input data type
     if nnodes > UINT32_MAX:
         dtype = np.uint64
-    else:
+    elif nnodes > UINT16_MAX:
         dtype = np.uint32
+    else:
+        dtype = np.uint16
     name_dict = dict(zip(names,
                          np.arange(names.shape[0], dtype=dtype)))
+    print('memory1', memory_profiler.memory_usage()[0])
+    print('elist size 1', sys.getsizeof(elist))
     elist.src = elist.src.map(name_dict)
     elist.dst = elist.dst.map(name_dict)
+    # convert names from float to uint16
+    if dtype == np.uint16:
+        elist.src = np.uint16(elist.src.values)
+        elist.dst = np.uint16(elist.dst.values)
+    print('memory2', memory_profiler.memory_usage()[0])
+    print('elist size 2', sys.getsizeof(elist))
+    # convert weights to float32 (NEED TO DOUCLBE CHECK this doesn't affect the embedding output)
+    elist.weight = np.float32(elist.weight.values)
+    print('memory3', memory_profiler.memory_usage()[0])
+    print('elist size 3', sys.getsizeof(elist))
     # clean up temp data
     allnodes = None
     name_dict = None
