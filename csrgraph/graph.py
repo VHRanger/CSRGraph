@@ -562,7 +562,10 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
         gc.collect()
         print('memory5', memory_profiler.memory_usage()[0])
     # Need to sort by src for _edgelist_to_graph
-    elist = elist.sort_values(by='src')
+    #elist = elist.sort_values(by='src')
+    order = np.lexsort(elist['src'].values)
+    for col in list(elist.columns):
+        elist[col] = elist[col].values[order]
     # extract numpy arrays and clear memory
     print('memory6', memory_profiler.memory_usage()[0])
     src = elist.src.to_numpy()
