@@ -494,6 +494,8 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
     """
     # Read in csv correctly to each column
     elist = pd.read_csv(f, sep=sep, header=header, keep_default_na=keep_default_na, **readcsvkwargs)
+    print('memory0', memory_profiler.memory_usage()[0])
+    print('elist size 0', sys.getsizeof(elist))
     if len(elist.columns) == 2:
         elist.columns = ['src', 'dst']
         elist['weight'] = np.ones(elist.shape[0])
@@ -525,6 +527,7 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
         dtype = np.uint32
     else:
         dtype = np.uint16
+    print(f"nnodes: {nnodes} dtype: {dtype}")
     name_dict = dict(zip(names,
                          np.arange(names.shape[0], dtype=dtype)))
     print('memory1', memory_profiler.memory_usage()[0])
@@ -547,21 +550,27 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
     gc.collect()
     # If undirected graph, append edgelist to reversed self
     if not directed:
+        print("before elist.copy")
         other_df = elist.copy()
+        print('memory4', memory_profiler.memory_usage()[0])
         other_df.columns = ['dst', 'src', 'weight']
         elist = pd.concat([elist, other_df])
         other_df = None
         gc.collect()
+        print('memory5', memory_profiler.memory_usage()[0])
     # Need to sort by src for _edgelist_to_graph
     elist = elist.sort_values(by='src')
     # extract numpy arrays and clear memory
+    print('memory6', memory_profiler.memory_usage()[0])
     src = elist.src.to_numpy()
     dst = elist.dst.to_numpy()
     weight = elist.weight.to_numpy()
     elist = None
     gc.collect()
+    print('memory7', memory_profiler.memory_usage()[0])
     G = methods._edgelist_to_graph(
         src, dst, weight,
         nnodes, nodenames=names
     )
+    print('memory8', memory_profiler.memory_usage()[0])
     return G
