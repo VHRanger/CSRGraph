@@ -555,7 +555,10 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
         print('memory4', memory_profiler.memory_usage()[0])
         other_df.columns = ['dst', 'src', 'weight']
         elist = pd.concat([elist, other_df])
-        other_df = None
+        print('memory4a', memory_profiler.memory_usage()[0])
+        #other_df = None
+        del other_df
+        print('memory4b', memory_profiler.memory_usage()[0])
         gc.collect()
         print('memory5', memory_profiler.memory_usage()[0])
     # Need to sort by src for _edgelist_to_graph
