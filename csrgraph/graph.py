@@ -541,7 +541,7 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
     print('memory2', memory_profiler.memory_usage()[0])
     print('elist size 2', sys.getsizeof(elist))
     # convert weights to float32 (NEED TO DOUCLBE CHECK this doesn't affect the embedding output)
-    elist.weight = np.float32(elist.weight.values)
+    elist.weight = np.float16(elist.weight.values)
     print('memory3', memory_profiler.memory_usage()[0])
     print('elist size 3', sys.getsizeof(elist))
     # clean up temp data
@@ -563,17 +563,24 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
         print('memory5', memory_profiler.memory_usage()[0])
     # Need to sort by src for _edgelist_to_graph
     #elist = elist.sort_values(by='src')
-    order = np.lexsort(elist['src'].values)
-    for col in list(elist.columns):
-        elist[col] = elist[col].values[order]
+#     order = np.lexsort(elist['src'].values)
+#     for col in list(elist.columns):
+#         elist[col] = elist[col].values[order]
     # extract numpy arrays and clear memory
+    # try converting pandas to numpy arrays and then sort
     print('memory6', memory_profiler.memory_usage()[0])
     src = elist.src.to_numpy()
     dst = elist.dst.to_numpy()
-    weight = elist.weight.to_numpy()
     elist = None
     gc.collect()
     print('memory7', memory_profiler.memory_usage()[0])
+    # sort the arrays
+    sort_index = np.argsort(src)
+    src = src[sort_index]
+    dst = dst[sort_index]
+    weight = weight[sort_index]
+    weight = np.float32(weight) # change the weight back to np.float32. csrgraph doesn't accept np.float16 type
+    del sort_index
     G = methods._edgelist_to_graph(
         src, dst, weight,
         nnodes, nodenames=names
