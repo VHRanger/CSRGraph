@@ -569,6 +569,7 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
     print('memory6', memory_profiler.memory_usage()[0])
     src = elist.src.to_numpy()
     dst = elist.dst.to_numpy()
+    weight = elist.weight.to_numpy()
     elist = None
     gc.collect()
     print('memory7', memory_profiler.memory_usage()[0])
