@@ -462,6 +462,98 @@ class csrgraph():
     # Also layout by hilbert space filling curve
     #
     #
+    
+def read_adjacency(f, directed=True, sep=',', header=None, index_col=0):
+    '''Creates a csrgraph from an adjacency matrix.'''
+    print('using read_adjacency not read_edgelist')
+    adj_df = pd.read_csv(f, sep=sep, header=header, index_col=index_col)
+    adj_df = adj_df.astype('float16')
+    allnodes = list(adj_df.columns)
+    adj_df.values[tuple([np.arange(len(adj_df))]*2)] = np.nan
+    elist = adj_df.stack().reset_index()
+    del adj_df        
+    print('memory0', memory_profiler.memory_usage()[0])
+    print('elist size 0', sys.getsizeof(elist))
+    if len(elist.columns) == 3:
+        elist.columns = ['src', 'dst', 'weight']
+    else: 
+        raise ValueError(f"""
+            Invalid columns: {elist.columns}
+            Expected 3 (source, destination, weight)
+            Read File: \n{elist.head(5)}
+        """)
+    # Create name mapping to normalize node IDs
+    # Somehow this is 1.5x faster than np.union1d. Shame on numpy.
+#     allnodes = list(
+#         set(elist.src.unique())
+#         .union(set(elist.dst.unique())))
+#     # Factor all nodes to unique IDs
+    names = (
+        pd.Series(allnodes).astype('category')
+        .cat.categories
+    )
+    nnodes = names.shape[0]
+    # Get the input data type
+    if nnodes > UINT32_MAX:
+        dtype = np.uint64
+    elif nnodes > UINT16_MAX:
+        dtype = np.uint32
+    else:
+        dtype = np.uint16
+    print(f"nnodes: {nnodes} dtype: {dtype}")
+    name_dict = dict(zip(names,
+                         np.arange(names.shape[0], dtype=dtype)))
+    print('memory1', memory_profiler.memory_usage()[0])
+    print('elist size 1', sys.getsizeof(elist))
+    elist.src = elist.src.map(name_dict)
+    elist.dst = elist.dst.map(name_dict)
+    # convert names from float to uint16
+    if dtype == np.uint16:
+        elist.src = np.uint16(elist.src.values)
+        elist.dst = np.uint16(elist.dst.values)
+    print('memory2', memory_profiler.memory_usage()[0])
+    print('elist size 2', sys.getsizeof(elist))
+    # convert weights to float32 (NEED TO DOUCLBE CHECK this doesn't affect the embedding output)
+    elist.weight = np.float16(elist.weight.values)
+    print('memory3', memory_profiler.memory_usage()[0])
+    print('elist size 3', sys.getsizeof(elist))
+    # clean up temp data
+    allnodes = None
+    name_dict = None
+    gc.collect()
+    # If undirected graph, append edgelist to reversed self
+    if not directed:
+        print("before elist.copy")
+        other_df = elist.copy()
+        print('memory4', memory_profiler.memory_usage()[0])
+        other_df.columns = ['dst', 'src', 'weight']
+        elist = pd.concat([elist, other_df])
+        print('memory4a', memory_profiler.memory_usage()[0])
+        other_df = None
+        gc.collect()
+        print('memory5', memory_profiler.memory_usage()[0])
+    # extract numpy arrays and clear memory
+    # try converting pandas to numpy arrays and then sort
+    print('memory6', memory_profiler.memory_usage()[0])
+    src = elist.src.to_numpy()
+    dst = elist.dst.to_numpy()
+    weight = elist.weight.to_numpy()
+    elist = None
+    gc.collect()
+    print('memory7', memory_profiler.memory_usage()[0])
+    # sort the arrays
+    sort_index = np.argsort(src)
+    src = src[sort_index]
+    dst = dst[sort_index]
+    weight = weight[sort_index]
+    weight = np.float32(weight) # change the weight back to np.float32. csrgraph doesn't accept np.float16 type
+    del sort_index
+    G = methods._edgelist_to_graph(
+        src, dst, weight,
+        nnodes, nodenames=names
+    )
+    print('memory8', memory_profiler.memory_usage()[0])
+    return G
 
 def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=False, **readcsvkwargs):
     """
