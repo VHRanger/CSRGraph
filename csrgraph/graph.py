@@ -463,10 +463,10 @@ class csrgraph():
     #
     #
     
-def read_adjacency(f, directed=True, sep=',', header=None, index_col=0):
+def read_adjacency(f, directed=True):
     '''Creates a csrgraph from an adjacency matrix.'''
     print('using read_adjacency not read_edgelist')
-    adj_df = pd.read_csv(f, sep=sep, header=header, index_col=index_col)
+    adj_df = pd.read_csv(f, index_col=0)
     adj_df = adj_df.astype('float16')
     allnodes = list(adj_df.columns)
     adj_df.values[tuple([np.arange(len(adj_df))]*2)] = np.nan
