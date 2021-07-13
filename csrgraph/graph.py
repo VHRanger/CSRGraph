@@ -16,7 +16,7 @@ from csrgraph.methods import (
     _row_norm, _node_degrees, _src_multiply, _dst_multiply
 )
 from csrgraph.random_walks import (
-    _random_walk, _node2vec_walks
+    _random_walk, _node2vec_walks,_node2vec_walks_with_rejective_sampling
 )
 from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep
@@ -191,7 +191,7 @@ class csrgraph():
                 start_nodes=None,
                 normalize_self=False,
                 return_weight=1.,
-                neighbor_weight=1.):
+                neighbor_weight=1.,use_rejective_sampling=False):
         """
         Create random walks from the transition matrix of a graph
             in CSR sparse format
@@ -210,7 +210,7 @@ class csrgraph():
             more like a Breadth-First Search.
             Having this very high  (> 2) makes search very local.
             Equal to the inverse of p in the Node2Vec paper.
-        explore_weight : float in (0, inf]
+        neighbor_weight : float in (0, inf]
             Weight on the probability of visitng a neighbor node
             to the one we're coming from in the random walk
             Having this higher tends the walks to be
@@ -220,6 +220,9 @@ class csrgraph():
             Equal to the inverse of q in the Node2Vec paper.
         threads : int
             number of threads to use.  0 is full use
+        use_rejective_sampling:bool
+        for deepwalk,this parameters is of no use
+        for node2vec,it determines if we use rejective sampling or not
 
         Returns
         -------
@@ -240,11 +243,18 @@ class csrgraph():
         # Node2Vec Biased walks if parameters specified
         if (return_weight > 1. or return_weight < 1.
                 or neighbor_weight < 1. or neighbor_weight > 1.):
-            walks = _node2vec_walks(T.weights, T.src, T.dst,
-                                    sampling_nodes=sampling_nodes,
-                                    walklen=walklen,
-                                    return_weight=return_weight,
-                                    neighbor_weight=neighbor_weight)
+            if use_rejective_sampling:
+                walks = _node2vec_walks_with_rejective_sampling(T.weights, T.src, T.dst,
+                                        sampling_nodes=sampling_nodes,
+                                        walklen=walklen,
+                                        return_weight=return_weight,
+                                        neighbor_weight=neighbor_weight)
+            else:
+                walks = _node2vec_walks(T.weights, T.src, T.dst,
+                                        sampling_nodes=sampling_nodes,
+                                        walklen=walklen,
+                                        return_weight=return_weight,
+                                        neighbor_weight=neighbor_weight)
         # much faster implementation for regular walks
         else:
             walks = _random_walk(T.weights, T.src, T.dst,
