@@ -17,7 +17,7 @@ from csrgraph.methods import (
     _node2vec_walks_with_rejective_sampling
 )
 from csrgraph.random_walks import (
-    _random_walk, _node2vec_walks
+    _random_walk, _node2vec_walks,_node2vec_walks_with_rejective_sampling
 )
 from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep

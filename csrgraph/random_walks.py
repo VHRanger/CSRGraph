@@ -126,6 +126,10 @@ def _node2vec_inner(
     return new_state
 
 
+
+
+
+
 @jit(nopython=True, nogil=True, parallel=True, fastmath=True)
 def _node2vec_walks(Tdata, Tindptr, Tindices,
                     sampling_nodes,
@@ -173,6 +177,7 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
     """
     n_walks = len(sampling_nodes)
     res = np.empty((n_walks, walklen), dtype=np.uint32)
+    
     for i in numba.prange(n_walks):
         # Current node (each element is one walk's state)
         state = sampling_nodes[i]
@@ -190,6 +195,108 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
         # Write final states
         res[i, -1] = state
     return res
+
+
+
+
+@jit(nopython=True, nogil=True)
+def _neighbors(indptr, indices_or_data, t):
+    return indices_or_data[indptr[t] : indptr[t + 1]]
+
+
+@jit(nopython=True, nogil=True)
+def _isin_sorted(a, x):
+    return a[np.searchsorted(a, x)] == x
+
+
+
+@jit(nopython=True, nogil=True, parallel=True, fastmath=True)
+def _node2vec_walks_with_rejective_sampling(Tdata, Tindptr, Tindices,
+                    sampling_nodes,
+                    walklen,
+                    return_weight,
+                    neighbor_weight):
+    """
+    Create biased random walks from the transition matrix of a graph 
+        in CSR sparse format. Bias method comes from Node2Vec paper.
+    
+    Parameters
+    ----------
+    Tdata : 1d np.array
+        CSR data vector from a sparse matrix. Can be accessed by M.data
+    Tindptr : 1d np.array
+        CSR index pointer vector from a sparse matrix. 
+        Can be accessed by M.indptr
+    Tindices : 1d np.array
+        CSR column vector from a sparse matrix. 
+        Can be accessed by M.indices
+    sampling_nodes : 1d np.array of int
+        List of node IDs to start random walks from.
+        Is generally equal to np.arrange(n_nodes) repeated for each epoch
+    walklen : int
+        length of the random walks
+    return_weight : float in (0, inf]
+        Weight on the probability of returning to node coming from
+        Having this higher tends the walks to be 
+        more like a Breadth-First Search.
+        Having this very high  (> 2) makes search very local.
+        Equal to the inverse of p in the Node2Vec paper.
+    neighbor_weight : float in (0, inf]
+        Weight on the probability of visitng a neighbor node
+        to the one we're coming from in the random walk
+        Having this higher tends the walks to be 
+        more like a Depth-First Search.
+        Having this very high makes search more outward.
+        Having this very low makes search very local.
+        Equal to the inverse of q in the Node2Vec paper.
+    Returns
+    -------
+    out : 2d np.array (n_walks, walklen)
+        A matrix where each row is a biased random walk, 
+        and each entry is the ID of the node
+    """
+    p=return_weight
+    q=neighbor_weight
+    max_prob = max(1 / p, 1, 1 / q)
+    prob_0 = 1 / p / max_prob
+    prob_1 = 1 / max_prob
+    prob_2 = 1 / q / max_prob
+
+    
+    n_walks = len(sampling_nodes)
+    res = np.empty((n_walks, walklen), dtype=np.uint32)
+    
+    for i in numba.prange(n_walks):
+        # Current node (each element is one walk's state)
+        state = sampling_nodes[i]
+        res[i, 0] = state
+        # Do one normal step first
+        state = _node2vec_first_step(state, Tdata, Tindices, Tindptr)
+        res[i, 1] = state ##初始的两个节点
+
+
+    ### 此时的state是index为1的节点
+
+        for k in range(2, walklen):
+            # Write state
+            while True:
+                new_state = _node2vec_first_step(state, Tdata, Tindices, Tindptr)
+                r = np.random.rand()
+                if new_state == res[i,k - 2]:
+                    # back to the previous node
+                    if r < prob_0:
+                        break
+                elif _isin_sorted(_neighbors(Tindptr, Tindices,res[i,k - 2]), new_state):
+                        # distance 1
+                    if r < prob_1:
+                        break
+                elif r < prob_2:
+                        # distance 2
+                    break
+            res[i, k] = new_state
+            state=new_state
+    return res
+
 
 
 @jit(nopython=True)
