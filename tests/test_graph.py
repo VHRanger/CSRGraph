@@ -81,7 +81,7 @@ class TestGGVec(unittest.TestCase):
 class TestGraph(unittest.TestCase):
     def test_api(self):
         wg = nx.generators.classic.wheel_graph(10)
-        A = nx.adj_matrix(wg)
+        A = nx.adjacency_matrix(wg)
         nodes = list(map(str, list(wg)))
         G = cg.csrgraph(wg)
         G.normalize()
@@ -92,7 +92,7 @@ class TestGraph(unittest.TestCase):
     def test_data_stealing(self):
         """normal ctor points to underlying passed data"""
         wg = nx.generators.classic.wheel_graph(10)
-        A = sparse.csr_matrix(nx.adj_matrix(wg))
+        A = sparse.csr_matrix(nx.adjacency_matrix(wg))
         nodes = list(map(str, list(wg)))
         G = cg.csrgraph(wg)
         self.assertIs(G.src, G.mat.indptr)

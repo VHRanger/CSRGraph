@@ -36,6 +36,7 @@ def _ggvec_edges_update(data, dst, indptr, w, b,
     """
     n_edges = dst.size
     total_loss = 0.
+    scale_factor = np.sqrt(w.shape[0])
     for edge in numba.prange(n_edges):
         node1 = dst[edge]
         # Find node in indptr array
@@ -44,6 +45,9 @@ def _ggvec_edges_update(data, dst, indptr, w, b,
             node2 = node2 - 1
         # Loss is dot product b/w two connected nodes
         pred = np.dot(w[node1], w[node2]) + b[node1] + b[node2]
+        # Scale dot product by number of embedding dimensions
+        # To stop instability with higher n_dims
+        pred = pred / scale_factor
         # Use arcsinh(weight) instead of log(weight) 
         #     handles all real valued weights well
         loss = (pred - data[edge] ** exponent)
@@ -81,12 +85,14 @@ def _ggvec_reverse(n_edges, w, b,
         handling multithreaded RNG (which plays poorly with numba)
     """
     nnodes = w.shape[0]
+    scale_factor = np.sqrt(w.shape[0])
     for _ in numba.prange(n_edges):
     	# TODO: this thrashes the cache. Find a clever soln
         node1 = np.random.randint(0, nnodes)
         node2 = np.random.randint(0, nnodes)
         # We assume no edge (weight = 0) between nodes on negative sampling pass
         loss = np.dot(w[node1], w[node2]) + b[node1] + b[node2]
+        loss = loss / scale_factor
         if loss < -max_loss: loss = -max_loss
         elif loss > max_loss: loss = max_loss
         _update_wgrad_clipped(learning_rate, loss, w[node1], w[node2])

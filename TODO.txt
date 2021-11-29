@@ -1,4 +1,9 @@
+- Fast n2v walks
+
+
 TODO:
+
+Travis CI -> Github Actions 
 
 Add GGVec negative_lr_ratio parameter
 
