@@ -368,13 +368,15 @@ class TestNodeWalks(unittest.TestCase):
             walklen=walklen,
             epochs=n_epoch,
             return_weight=99999,
-            neighbor_weight=1.)
+            neighbor_weight=1.,
+            rejective_sampling=False)
         # Neighbor weight ~ 0 should also loop 
         t2 = fully_connected.random_walks(
             walklen=walklen,
             epochs=n_epoch,
             return_weight=1.,
-            neighbor_weight=0.0001)
+            neighbor_weight=0.0001,
+            rejective_sampling=False)
         self.assertTrue(t1.shape == (n_nodes * n_epoch, walklen))
         # even columns should be equal (always returning)
         np.testing.assert_array_equal(t1[:, 0], t1[:, 2])

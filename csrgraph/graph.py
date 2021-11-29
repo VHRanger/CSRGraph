@@ -13,8 +13,7 @@ import time
 import warnings
 
 from csrgraph.methods import (
-    _row_norm, _node_degrees, _src_multiply, _dst_multiply,
-    _node2vec_walks_with_rejective_sampling
+    _row_norm, _node_degrees, _src_multiply, _dst_multiply
 )
 from csrgraph.random_walks import (
     _random_walk, _node2vec_walks,_node2vec_walks_with_rejective_sampling
@@ -194,7 +193,7 @@ class csrgraph():
                 normalize_self=False,
                 return_weight=1.,
                 neighbor_weight=1.,
-                rejective_sampling=True):
+                rejective_sampling=False):
         """
         Create random walks from the transition matrix of a graph
             in CSR sparse format
@@ -226,6 +225,8 @@ class csrgraph():
         rejective_sampling: bool
             for deepwalk (p=1, q=1), this parameters is of no use
             for node2vec walks, it determines if we use rejective sampling or not
+            Rejective sampling is faster, but less stable
+            Credit to https://github.com/louisabraham/fastnode2vec for original idea
 
         Returns
         -------

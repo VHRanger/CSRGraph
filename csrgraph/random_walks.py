@@ -39,7 +39,7 @@ def _random_walk(weights, indptr, dst,
         and each entry is the ID of the node
     """
     n_walks = len(sampling_nodes)
-    res = np.empty((n_walks, walklen), dtype=np.uint32)
+    res = np.empty((n_walks, walklen), dtype=dst.dtype)
     n_nodes = indptr.size
     n_edges = weights.size
     for i in numba.prange(n_walks):
@@ -126,10 +126,6 @@ def _node2vec_inner(
     return new_state
 
 
-
-
-
-
 @jit(nopython=True, nogil=True, parallel=True, fastmath=True)
 def _node2vec_walks(Tdata, Tindptr, Tindices,
                     sampling_nodes,
@@ -176,7 +172,7 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
         and each entry is the ID of the node
     """
     n_walks = len(sampling_nodes)
-    res = np.empty((n_walks, walklen), dtype=np.uint32)
+    res = np.empty((n_walks, walklen), dtype=Tindices.dtype)
     
     for i in numba.prange(n_walks):
         # Current node (each element is one walk's state)
@@ -199,26 +195,28 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
 
 
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, fastmath=True)
 def _neighbors(indptr, indices_or_data, t):
     return indices_or_data[indptr[t] : indptr[t + 1]]
 
 
-@jit(nopython=True, nogil=True)
-def _isin_sorted(a, x):
-    return a[np.searchsorted(a, x)] == x
-
+@jit(nopython=True, nogil=True, fastmath=True)
+def _isin(val, arr):
+    for i in range(len(arr)):
+        if arr[i] == val:
+            return True
+    return False
 
 
 @jit(nopython=True, nogil=True, parallel=True, fastmath=True)
-def _node2vec_walks_with_rejective_sampling(Tdata, Tindptr, Tindices,
-                    sampling_nodes,
-                    walklen,
-                    return_weight,
-                    neighbor_weight):
+def _node2vec_walks_with_rejective_sampling(
+    Tdata, Tindptr, Tindices, sampling_nodes,
+    walklen, return_weight, neighbor_weight):
     """
     Create biased random walks from the transition matrix of a graph 
         in CSR sparse format. Bias method comes from Node2Vec paper.
+    
+    Rejective sampling implementation comes from https://github.com/louisabraham/fastnode2vec
     
     Parameters
     ----------
@@ -255,46 +253,39 @@ def _node2vec_walks_with_rejective_sampling(Tdata, Tindptr, Tindices,
         A matrix where each row is a biased random walk, 
         and each entry is the ID of the node
     """
-    p=return_weight
-    q=neighbor_weight
+    p = return_weight
+    q = neighbor_weight
     max_prob = max(1 / p, 1, 1 / q)
     prob_0 = 1 / p / max_prob
     prob_1 = 1 / max_prob
     prob_2 = 1 / q / max_prob
 
-    
     n_walks = len(sampling_nodes)
-    res = np.empty((n_walks, walklen), dtype=np.uint32)
-    
+    res = np.empty((n_walks, walklen), dtype=Tindices.dtype)
     for i in numba.prange(n_walks):
         # Current node (each element is one walk's state)
         state = sampling_nodes[i]
         res[i, 0] = state
         # Do one normal step first
         state = _node2vec_first_step(state, Tdata, Tindices, Tindptr)
-        res[i, 1] = state ##初始的两个节点
-
-
-    ### 此时的state是index为1的节点
-
+        res[i, 1] = state
         for k in range(2, walklen):
             # Write state
             while True:
                 new_state = _node2vec_first_step(state, Tdata, Tindices, Tindptr)
                 r = np.random.rand()
-                if new_state == res[i,k - 2]:
+                if new_state == res[i, k-2]:
                     # back to the previous node
                     if r < prob_0:
                         break
-                elif _isin_sorted(_neighbors(Tindptr, Tindices,res[i,k - 2]), new_state):
-                        # distance 1
+                elif _isin(new_state, _neighbors(Tindptr, Tindices, res[i, k-2])):
+                    # distance 1
                     if r < prob_1:
                         break
                 elif r < prob_2:
-                        # distance 2
+                    # distance 2
                     break
             res[i, k] = new_state
-            state=new_state
     return res
 
 
