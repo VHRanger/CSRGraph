@@ -13,7 +13,8 @@ import time
 import warnings
 
 from csrgraph.methods import (
-    _row_norm, _node_degrees, _src_multiply, _dst_multiply
+    _row_norm, _node_degrees, _src_multiply, _dst_multiply,
+    _node2vec_walks_with_rejective_sampling
 )
 from csrgraph.random_walks import (
     _random_walk, _node2vec_walks,_node2vec_walks_with_rejective_sampling
@@ -22,6 +23,7 @@ from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep
 
 UINT32_MAX = (2**32) - 1
+UINT16_MAX = (2**16) - 1
 
 class csrgraph():
     """
@@ -81,7 +83,7 @@ class csrgraph():
                 self.names = nodenames
         # NetworkX Graph input
         elif isinstance(data, (nx.Graph, nx.DiGraph)):
-            mat = nx.adj_matrix(data)
+            mat = nx.adjacency_matrix(data)
             mat.data = mat.data.astype(np.float32)
             self.mat = mat
             nodenames = list(data)
@@ -191,7 +193,8 @@ class csrgraph():
                 start_nodes=None,
                 normalize_self=False,
                 return_weight=1.,
-                neighbor_weight=1.,use_rejective_sampling=False):
+                neighbor_weight=1.,
+                rejective_sampling=True):
         """
         Create random walks from the transition matrix of a graph
             in CSR sparse format
@@ -220,9 +223,9 @@ class csrgraph():
             Equal to the inverse of q in the Node2Vec paper.
         threads : int
             number of threads to use.  0 is full use
-        use_rejective_sampling:bool
-        for deepwalk,this parameters is of no use
-        for node2vec,it determines if we use rejective sampling or not
+        rejective_sampling: bool
+            for deepwalk (p=1, q=1), this parameters is of no use
+            for node2vec walks, it determines if we use rejective sampling or not
 
         Returns
         -------
@@ -243,7 +246,7 @@ class csrgraph():
         # Node2Vec Biased walks if parameters specified
         if (return_weight > 1. or return_weight < 1.
                 or neighbor_weight < 1. or neighbor_weight > 1.):
-            if use_rejective_sampling:
+            if rejective_sampling:
                 walks = _node2vec_walks_with_rejective_sampling(T.weights, T.src, T.dst,
                                         sampling_nodes=sampling_nodes,
                                         walklen=walklen,
@@ -501,7 +504,10 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
     Returns : csrgraph
     """
     # Read in csv correctly to each column
-    elist = pd.read_csv(f, sep=sep, header=header, keep_default_na=keep_default_na, **readcsvkwargs)
+    elist = pd.read_csv(
+        f, sep=sep, header=header, 
+        keep_default_na=keep_default_na, **readcsvkwargs
+    )
     if len(elist.columns) == 2:
         elist.columns = ['src', 'dst']
         elist['weight'] = np.ones(elist.shape[0])
@@ -526,14 +532,16 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
     )
     nnodes = names.shape[0]
     # Get the input data type
+    if nnodes > UINT16_MAX:
+        dtype = np.uint32
     if nnodes > UINT32_MAX:
         dtype = np.uint64
     else:
-        dtype = np.uint32
+        dtype = np.uint16
     name_dict = dict(zip(names,
                          np.arange(names.shape[0], dtype=dtype)))
-    elist.src = elist.src.map(name_dict)
-    elist.dst = elist.dst.map(name_dict)
+    elist.src = elist.src.map(name_dict).astype(dtype)
+    elist.dst = elist.dst.map(name_dict).astype(dtype)
     # clean up temp data
     allnodes = None
     name_dict = None
