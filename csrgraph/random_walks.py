@@ -148,7 +148,7 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
         Can be accessed by M.indices
     sampling_nodes : 1d np.array of int
         List of node IDs to start random walks from.
-        Is generally equal to np.arrange(n_nodes) repeated for each epoch
+        Is generally equal to np.arange(n_nodes) repeated for each epoch
     walklen : int
         length of the random walks
     return_weight : float in (0, inf]
@@ -230,7 +230,7 @@ def _node2vec_walks_with_rejective_sampling(
         Can be accessed by M.indices
     sampling_nodes : 1d np.array of int
         List of node IDs to start random walks from.
-        Is generally equal to np.arrange(n_nodes) repeated for each epoch
+        Is generally equal to np.arange(n_nodes) repeated for each epoch
     walklen : int
         length of the random walks
     return_weight : float in (0, inf]
