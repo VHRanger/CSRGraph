@@ -509,6 +509,10 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
         f, sep=sep, header=header, 
         keep_default_na=keep_default_na, **readcsvkwargs
     )
+    return _from_df(elist, directed=directed)
+
+
+def _from_df(elist: pd.DataFrame, directed: bool = True) -> csrgraph:
     if len(elist.columns) == 2:
         elist.columns = ['src', 'dst']
         elist['weight'] = np.ones(elist.shape[0])
