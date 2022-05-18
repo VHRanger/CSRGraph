@@ -21,6 +21,12 @@ from csrgraph.random_walks import (
 from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep
 
+__all__ = [
+    "csrgraph",
+    "read_edgelist",
+    "from_tuples",
+]
+
 UINT32_MAX = (2**32) - 1
 UINT16_MAX = (2**16) - 1
 
@@ -477,7 +483,7 @@ class csrgraph():
 
 def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=False, **readcsvkwargs):
     """
-    Creates a csrgraph from an edgelist.
+    Creates a csrgraph from an edgelist file.
 
     The edgelist should be in the form 
        [source  destination]
@@ -571,3 +577,16 @@ def _from_df(elist: pd.DataFrame, directed: bool = True) -> csrgraph:
         nnodes, nodenames=names
     )
     return G
+
+
+def from_tuples(tuples, directed: bool = False) -> csrgraph:
+    """
+    Creates a csrgraph from an iterable of edge tuples.
+
+    tuples : iterable[tuple[str, str]] or iterable[tuple[str, str, str]]]
+        Either an iterable of source, target pairs or an iterable of
+        source, target, weight triples
+    Returns : csrgraph
+    """
+    elist = pd.DataFrame(tuples)
+    return _from_df(elist, directed=directed)
