@@ -247,9 +247,7 @@ class TestFileInput(unittest.TestCase):
         name_dict = dict(zip(np.arange(N_NODES), new_names))
         for c in df.columns:
             df[c] = df[c].map(name_dict)
-        # Pass this new data to read_edgelist
-        data = io.StringIO(df.to_csv(index=False, header=False))
-        G = cg.read_edgelist(data, sep=',')
+        G = cg.from_df(df)
         # re-read original graph
         df2 = pd.read_csv(fname, sep="\t", header=None)
         # re-map IDs to string node names
