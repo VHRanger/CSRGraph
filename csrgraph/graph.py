@@ -24,6 +24,7 @@ from csrgraph import ggvec, glove, grarep
 __all__ = [
     "csrgraph",
     "read_edgelist",
+    "from_df",
     "from_tuples",
 ]
 
@@ -515,10 +516,18 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
         f, sep=sep, header=header, 
         keep_default_na=keep_default_na, **readcsvkwargs
     )
-    return _from_df(elist, directed=directed)
+    return from_df(elist, directed=directed)
 
 
-def _from_df(elist: pd.DataFrame, directed: bool = True) -> csrgraph:
+def from_df(elist: pd.DataFrame, directed: bool = True) -> csrgraph:
+    """
+    Creates a csrgraph from a DataFrame of either two or three columns.
+
+    elist :
+        Either a DataFrame with two columns for source and target or three
+        columns for source, target, and weight.
+    Returns : csrgraph
+    """
     if len(elist.columns) == 2:
         elist.columns = ['src', 'dst']
         elist['weight'] = np.ones(elist.shape[0])
@@ -589,4 +598,4 @@ def from_tuples(tuples, directed: bool = False) -> csrgraph:
     Returns : csrgraph
     """
     elist = pd.DataFrame(tuples)
-    return _from_df(elist, directed=directed)
+    return from_df(elist, directed=directed)
