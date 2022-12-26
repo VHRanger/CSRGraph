@@ -30,7 +30,7 @@ def _edgelist_to_graph(src, dst, weights, nnodes, nodenames=None):
     # Fill indptr array
     new_src[1:] = np.cumsum(np.bincount(src, minlength=nnodes))
     return cg.csrgraph(
-        sparse.csr_matrix((weights, dst, new_src)),
+        sparse.csr_matrix((weights, dst, new_src), shape = (new_src.shape[0] - 1, new_src.shape[0] - 1)),
         nodenames=nodenames
     )
 
