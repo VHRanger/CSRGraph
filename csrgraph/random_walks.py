@@ -8,9 +8,11 @@ from numba import jit
 import numpy as np
 import pandas as pd
 
+DEFAULT_RNG = np.random.default_rng()
+
 @jit(nopython=True, parallel=True, nogil=True, fastmath=True)
 def _random_walk(weights, indptr, dst,
-                 sampling_nodes, walklen):
+                 sampling_nodes, walklen, rng=DEFAULT_RNG):
     """
     Create random walks from the transition matrix of a graph 
         in CSR sparse format
@@ -59,7 +61,7 @@ def _random_walk(weights, indptr, dst,
               cdf = np.cumsum(p)
               # Random draw in [0, 1] for each row
               # Choice is where random draw falls in cumulative distribution
-              draw = np.random.rand()
+              draw = rng.random()
               # Find where draw is in cdf
               # Then use its index to update state
               next_idx = np.searchsorted(cdf, draw)
@@ -75,7 +77,7 @@ def _random_walk(weights, indptr, dst,
 
 
 @jit(nopython=True, nogil=True, fastmath=True)
-def _node2vec_first_step(state, Tdata, Tindices, Tindptr):
+def _node2vec_first_step(state, Tdata, Tindices, Tindptr, rng=DEFAULT_RNG):
     """
     Inner code for node2vec walks
     Normal random walk step
@@ -85,7 +87,7 @@ def _node2vec_first_step(state, Tdata, Tindices, Tindptr):
     end = Tindptr[state+1]
     p = Tdata[start:end]
     cdf = np.cumsum(p)
-    draw = np.random.rand()
+    draw = rng.random()
     next_idx = np.searchsorted(cdf, draw)
     state = Tindices[start + next_idx]
     return state
@@ -95,7 +97,9 @@ def _node2vec_first_step(state, Tdata, Tindices, Tindptr):
 def _node2vec_inner(
     res, i, k, state,
     Tdata, Tindices, Tindptr, 
-    return_weight, neighbor_weight):
+    return_weight, neighbor_weight,
+    rng=DEFAULT_RNG
+):
     """
     Inner loop core for node2vec walks
     Does the biased walk updating (pure function)
@@ -120,7 +124,7 @@ def _node2vec_inner(
         p[n_idx] = np.multiply(p[n_idx], neighbor_weight)
     # Get next state
     cdf = np.cumsum(np.divide(p, np.sum(p)))
-    draw = np.random.rand()
+    draw = rng.random()
     next_idx = np.searchsorted(cdf, draw)
     new_state = this_edges[next_idx]
     return new_state
@@ -131,7 +135,8 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
                     sampling_nodes,
                     walklen,
                     return_weight,
-                    neighbor_weight):
+                    neighbor_weight, 
+                    rng=DEFAULT_RNG):
     """
     Create biased random walks from the transition matrix of a graph 
         in CSR sparse format. Bias method comes from Node2Vec paper.
@@ -211,7 +216,7 @@ def _isin(val, arr):
 @jit(nopython=True, nogil=True, parallel=True, fastmath=True)
 def _node2vec_walks_with_rejective_sampling(
     Tdata, Tindptr, Tindices, sampling_nodes,
-    walklen, return_weight, neighbor_weight):
+    walklen, return_weight, neighbor_weight, rng=DEFAULT_RNG):
     """
     Create biased random walks from the transition matrix of a graph 
         in CSR sparse format. Bias method comes from Node2Vec paper.
@@ -273,7 +278,7 @@ def _node2vec_walks_with_rejective_sampling(
             # Write state
             while True:
                 new_state = _node2vec_first_step(state, Tdata, Tindices, Tindptr)
-                r = np.random.rand()
+                r = rng.random()
                 if new_state == res[i, k-2]:
                     # back to the previous node
                     if r < prob_0:
