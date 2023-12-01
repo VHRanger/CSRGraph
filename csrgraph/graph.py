@@ -16,7 +16,7 @@ from csrgraph.methods import (
     _row_norm, _node_degrees, _src_multiply, _dst_multiply
 )
 from csrgraph.random_walks import (
-    _random_walk, _node2vec_walks,_node2vec_walks_with_rejective_sampling
+    _random_walk, _node2vec_walks,_node2vec_walks_with_rejective_sampling, DEFAULT_RNG
 )
 from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep
@@ -200,7 +200,8 @@ class csrgraph():
                 normalize_self=False,
                 return_weight=1.,
                 neighbor_weight=1.,
-                rejective_sampling=False):
+                rejective_sampling=False, 
+                seed=DEFAULT_RNG):
         """
         Create random walks from the transition matrix of a graph
             in CSR sparse format
@@ -259,17 +260,19 @@ class csrgraph():
                                         sampling_nodes=sampling_nodes,
                                         walklen=walklen,
                                         return_weight=return_weight,
-                                        neighbor_weight=neighbor_weight)
+                                        neighbor_weight=neighbor_weight, 
+                                        rng=seed)
             else:
                 walks = _node2vec_walks(T.weights, T.src, T.dst,
                                         sampling_nodes=sampling_nodes,
                                         walklen=walklen,
                                         return_weight=return_weight,
-                                        neighbor_weight=neighbor_weight)
+                                        neighbor_weight=neighbor_weight,
+                                        rng=seed)
         # much faster implementation for regular walks
         else:
             walks = _random_walk(T.weights, T.src, T.dst,
-                                 sampling_nodes, walklen)
+                                 sampling_nodes, walklen, rng=seed)
         return walks
 
     def ggvec(self, n_components=2,

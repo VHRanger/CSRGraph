@@ -184,7 +184,7 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
         state = sampling_nodes[i]
         res[i, 0] = state
         # Do one normal step first
-        state = _node2vec_first_step(state, Tdata, Tindices, Tindptr)
+        state = _node2vec_first_step(state, Tdata, Tindices, Tindptr, rng=rng)
         for k in range(1, walklen-1):
             # Write state
             res[i, k] = state
