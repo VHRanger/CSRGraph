@@ -555,12 +555,11 @@ def from_df(elist: pd.DataFrame, directed: bool = True) -> csrgraph:
     )
     nnodes = names.shape[0]
     # Get the input data type
+    dtype = np.uint16
     if nnodes > UINT16_MAX:
         dtype = np.uint32
     if nnodes > UINT32_MAX:
         dtype = np.uint64
-    else:
-        dtype = np.uint16
     name_dict = dict(zip(names,
                          np.arange(names.shape[0], dtype=dtype)))
     elist.src = elist.src.map(name_dict).astype(dtype)
