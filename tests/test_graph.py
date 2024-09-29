@@ -68,7 +68,7 @@ class TestGGVec(unittest.TestCase):
         )
         cluster_hat = cluster.AgglomerativeClustering(
             n_clusters=n_clusters,
-            affinity='cosine', 
+            metric='cosine', 
             linkage='average'
         ).fit(v).labels_
         r1 = metrics.adjusted_mutual_info_score(cluster_hat, labels)

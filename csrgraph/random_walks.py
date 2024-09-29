@@ -4,15 +4,22 @@ These are outside the CSRGraph class so methods can call them
 """
 import gc
 import numba
-from numba import jit
+from numba import jit, njit
 import numpy as np
 import pandas as pd
 
-DEFAULT_RNG = np.random.default_rng()
+@njit
+def seed_numba(a):
+    np.random.seed(a)
 
-@jit(nopython=True, parallel=True, nogil=True, fastmath=True)
+@njit
+def rand():
+    return np.random.rand()
+
+
+@njit(parallel=True, nogil=True, fastmath=True)
 def _random_walk(weights, indptr, dst,
-                 sampling_nodes, walklen, rng=DEFAULT_RNG):
+                 sampling_nodes, walklen):
     """
     Create random walks from the transition matrix of a graph 
         in CSR sparse format
@@ -61,7 +68,7 @@ def _random_walk(weights, indptr, dst,
               cdf = np.cumsum(p)
               # Random draw in [0, 1] for each row
               # Choice is where random draw falls in cumulative distribution
-              draw = rng.random()
+              draw = rand()
               # Find where draw is in cdf
               # Then use its index to update state
               next_idx = np.searchsorted(cdf, draw)
@@ -77,7 +84,7 @@ def _random_walk(weights, indptr, dst,
 
 
 @jit(nopython=True, nogil=True, fastmath=True)
-def _node2vec_first_step(state, Tdata, Tindices, Tindptr, rng=DEFAULT_RNG):
+def _node2vec_first_step(state, Tdata, Tindices, Tindptr):
     """
     Inner code for node2vec walks
     Normal random walk step
@@ -87,7 +94,7 @@ def _node2vec_first_step(state, Tdata, Tindices, Tindptr, rng=DEFAULT_RNG):
     end = Tindptr[state+1]
     p = Tdata[start:end]
     cdf = np.cumsum(p)
-    draw = rng.random()
+    draw = rand()
     next_idx = np.searchsorted(cdf, draw)
     state = Tindices[start + next_idx]
     return state
@@ -97,8 +104,7 @@ def _node2vec_first_step(state, Tdata, Tindices, Tindptr, rng=DEFAULT_RNG):
 def _node2vec_inner(
     res, i, k, state,
     Tdata, Tindices, Tindptr, 
-    return_weight, neighbor_weight,
-    rng=DEFAULT_RNG
+    return_weight, neighbor_weight
 ):
     """
     Inner loop core for node2vec walks
@@ -124,7 +130,7 @@ def _node2vec_inner(
         p[n_idx] = np.multiply(p[n_idx], neighbor_weight)
     # Get next state
     cdf = np.cumsum(np.divide(p, np.sum(p)))
-    draw = rng.random()
+    draw = rand()
     next_idx = np.searchsorted(cdf, draw)
     new_state = this_edges[next_idx]
     return new_state
@@ -135,8 +141,7 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
                     sampling_nodes,
                     walklen,
                     return_weight,
-                    neighbor_weight, 
-                    rng=DEFAULT_RNG):
+                    neighbor_weight):
     """
     Create biased random walks from the transition matrix of a graph 
         in CSR sparse format. Bias method comes from Node2Vec paper.
@@ -184,7 +189,7 @@ def _node2vec_walks(Tdata, Tindptr, Tindices,
         state = sampling_nodes[i]
         res[i, 0] = state
         # Do one normal step first
-        state = _node2vec_first_step(state, Tdata, Tindices, Tindptr, rng=rng)
+        state = _node2vec_first_step(state, Tdata, Tindices, Tindptr)
         for k in range(1, walklen-1):
             # Write state
             res[i, k] = state
@@ -216,7 +221,7 @@ def _isin(val, arr):
 @jit(nopython=True, nogil=True, parallel=True, fastmath=True)
 def _node2vec_walks_with_rejective_sampling(
     Tdata, Tindptr, Tindices, sampling_nodes,
-    walklen, return_weight, neighbor_weight, rng=DEFAULT_RNG):
+    walklen, return_weight, neighbor_weight, ):
     """
     Create biased random walks from the transition matrix of a graph 
         in CSR sparse format. Bias method comes from Node2Vec paper.
@@ -278,7 +283,7 @@ def _node2vec_walks_with_rejective_sampling(
             # Write state
             while True:
                 new_state = _node2vec_first_step(state, Tdata, Tindices, Tindptr)
-                r = rng.random()
+                r = rand()
                 if new_state == res[i, k-2]:
                     # back to the previous node
                     if r < prob_0:

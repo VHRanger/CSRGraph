@@ -16,7 +16,7 @@ from csrgraph.methods import (
     _row_norm, _node_degrees, _src_multiply, _dst_multiply
 )
 from csrgraph.random_walks import (
-    _random_walk, _node2vec_walks,_node2vec_walks_with_rejective_sampling, DEFAULT_RNG
+    _random_walk, _node2vec_walks,_node2vec_walks_with_rejective_sampling, seed_numba
 )
 from csrgraph import methods, random_walks
 from csrgraph import ggvec, glove, grarep
@@ -94,7 +94,7 @@ class csrgraph():
             self.mat = mat
             nodenames = list(data)
         # CSR Matrix Input
-        elif isinstance(data, sparse.csr_matrix):
+        elif isinstance(data, (sparse.csr_matrix, sparse.csr_array)):
             if copy: self.mat = data.copy()
             else: self.mat = data
         # Numpy Array Input
@@ -201,7 +201,7 @@ class csrgraph():
                 return_weight=1.,
                 neighbor_weight=1.,
                 rejective_sampling=False, 
-                seed=DEFAULT_RNG):
+                seed=None):
         """
         Create random walks from the transition matrix of a graph
             in CSR sparse format
@@ -242,6 +242,9 @@ class csrgraph():
             A matrix where each row is a random walk,
             and each entry is the ID of the node
         """
+        if seed is not None:
+            seed = int(seed)
+            seed_numba(seed)
         # Make csr graph
         if normalize_self:
             self.normalize(return_self=True)
@@ -260,19 +263,17 @@ class csrgraph():
                                         sampling_nodes=sampling_nodes,
                                         walklen=walklen,
                                         return_weight=return_weight,
-                                        neighbor_weight=neighbor_weight, 
-                                        rng=seed)
+                                        neighbor_weight=neighbor_weight)
             else:
                 walks = _node2vec_walks(T.weights, T.src, T.dst,
                                         sampling_nodes=sampling_nodes,
                                         walklen=walklen,
                                         return_weight=return_weight,
-                                        neighbor_weight=neighbor_weight,
-                                        rng=seed)
+                                        neighbor_weight=neighbor_weight)
         # much faster implementation for regular walks
         else:
             walks = _random_walk(T.weights, T.src, T.dst,
-                                 sampling_nodes, walklen, rng=seed)
+                                 sampling_nodes, walklen)
         return walks
 
     def ggvec(self, n_components=2,
