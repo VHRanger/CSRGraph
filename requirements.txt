@@ -5,3 +5,4 @@ pandas
 scipy
 scikit-learn
 tqdm
+pyarrow

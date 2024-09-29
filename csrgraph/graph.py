@@ -3,23 +3,24 @@ from copy import deepcopy
 import gc
 import networkx as nx
 import numba
-from numba import jit
 import numpy as np
 import os
 import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
 from scipy import sparse
 from sklearn.decomposition import TruncatedSVD
 import time
 import warnings
 
-from csrgraph.methods import (
+from csrgraph.numba_backend.methods import (
     _row_norm, _node_degrees, _src_multiply, _dst_multiply
 )
-from csrgraph.random_walks import (
+from csrgraph.numba_backend.random_walks import (
     _random_walk, _node2vec_walks,_node2vec_walks_with_rejective_sampling, seed_numba
 )
-from csrgraph import methods, random_walks
-from csrgraph import ggvec, glove, grarep
+from csrgraph.numba_backend import methods, random_walks
+from csrgraph.embedding import ggvec, glove, grarep
 
 __all__ = [
     "csrgraph",
@@ -75,45 +76,23 @@ class csrgraph():
         
         TODO: subclass scipy.csr_matrix???
         """
-        # If input is a CSRGraph, same object
-        if isinstance(data, csrgraph):
-            if copy:
-                self.mat = data.mat.copy()
-                self.names = deepcopy(data.names)
-            else:
-                self.mat = data.mat
-                self.names = data.names
-            if not nodenames:
-                nodenames = self.names
-            else:
-                self.names = nodenames
-        # NetworkX Graph input
-        elif isinstance(data, (nx.Graph, nx.DiGraph)):
-            mat = nx.adjacency_matrix(data)
-            mat.data = mat.data.astype(np.float32)
-            self.mat = mat
-            nodenames = list(data)
-        # CSR Matrix Input
-        elif isinstance(data, (sparse.csr_matrix, sparse.csr_array)):
-            if copy: self.mat = data.copy()
-            else: self.mat = data
-        # Numpy Array Input
-        elif isinstance(data, np.ndarray):
-            self.mat = sparse.csr_matrix(data)
-        else:
-            raise ValueError(f"Incorrect input data type: {type(data).__name__}")
+        self.read_input_data(data, copy)
         # Now that we have the core csr_matrix, alias underlying arrays
-        assert hasattr(self, 'mat')
-        self.weights = self.mat.data
-        self.src = self.mat.indptr
-        self.dst = self.mat.indices
+        assert hasattr(self, 'weights')
+        assert hasattr(self, 'src')
+        assert hasattr(self, 'dst')
+        # Convert to Arrow data
+        self.weights = pa.Array.from_pandas(self.weights)
+        self.src     = pa.Array.from_pandas(self.src)
+        self.dst     = pa.Array.from_pandas(self.dst)
         # indptr has one more element than nnodes
-        self.nnodes = self.src.size - 1
-        # node name -> node ID
+        self.nnodes = len(self.src) - 1
+        # If no node names, just a range of ints
         if nodenames is not None:
-            self.names = pd.Series(nodenames)
-        else:
+            self.names = nodenames
+        if not hasattr(self, 'names'):
             self.names = pd.Series(np.arange(self.nnodes))
+        self.names = pa.Array.from_pandas(self.names)
         # Bounds check once here otherwise there be dragons later
         max_idx = np.max(self.dst)
         if self.nnodes < max_idx:
@@ -121,6 +100,64 @@ class csrgraph():
                 Out of bounds node: {max_idx}, nnodes: {self.nnodes}
             """)
         self.set_threads(threads)
+
+
+    def read_input_data(self, data, copy=True):
+        """
+        Convert from whatever input data format to our format 
+        data : The graph data. Can be one of:
+            **NetworkX Graph**
+            **Numpy dense matrix**
+            **CSR Matrix**
+            **(data, indices, indptr)**
+            **CSRGraph object**
+
+        nodenames (array of str or int) : Node names
+            The position in this array should correspond with the node ID
+            So if passing a CSR Matrix or raw data, it should be co-indexed
+            with the matrix/raw data arrays
+
+        copy : bool
+            Wether to copy passed data to create new object
+            Default behavior is to point to underlying ctor passed data
+            For networkX graphs and numpy dense matrices we create a new object anyway
+        """
+        # If input is a CSRGraph, same object
+        if isinstance(data, csrgraph):
+            if copy:
+                self.weights = data.weights.copy()
+                self.src = data.src.copy()
+                self.dst = data.dst.copy()
+                self.names = pd.Series(deepcopy(data.names))
+            else:
+                self.names = pd.Series(data.names)
+                self.weights = data.weights
+                self.src = data.indptr
+                self.dst = data.indices
+        # NetworkX Graph input
+        elif isinstance(data, (nx.Graph, nx.DiGraph)):
+            mat = nx.adjacency_matrix(data)
+            mat.data = mat.data.astype(np.float32)
+            self.weights = mat.data
+            self.src = mat.indptr
+            self.dst = mat.indices
+            self.names = pd.Series(list(data))
+        # CSR Matrix Input
+        elif isinstance(data, (sparse.csr_matrix, sparse.csr_array)):
+            if copy: mat = data.copy()
+            else: mat = data
+            self.weights = mat.data
+            self.src = mat.indptr
+            self.dst = mat.indices
+        # Numpy Array Input
+        elif isinstance(data, np.ndarray):
+            mat = sparse.csr_matrix(data)
+            self.weights = mat.data
+            self.src = mat.indptr
+            self.dst = mat.indices
+        else:
+            raise ValueError(f"Incorrect input data type: {type(data).__name__}")
+
 
 
     def set_threads(self, threads):
@@ -145,6 +182,7 @@ class csrgraph():
             _src_multiply.recompile()
             _dst_multiply.recompile()
 
+
     def __getitem__(self, node):
         """
         [] operator
@@ -153,12 +191,21 @@ class csrgraph():
         # Get node ID from names array
         # This is O(n) by design -- we more often get names from IDs
         #    than we get IDs from names and we don't want to hold 2 maps
-        # TODO : replace names with a pd.Index and use get_loc
-        node_id = self.names[self.names == node].index[0]
-        edges = self.dst[
-            self.src[node_id] : self.src[node_id+1]
-        ]
-        return self.names.iloc[edges].values
+        # node_id = self.names.get_loc(node)
+        # edges = self.dst[
+        #     (self.src[node_id]).as_py()
+        #     : (self.src[node_id+1]).as_py()
+        # ]
+        if not isinstance(node, Iterable):
+            node = np.array([node])
+        nodes_list = pa.array(node)
+        pc.cast(nodes_list, self.names.type)        
+        node_idx = pc.index(self.names, nodes_list).as_py()
+        src_idx_start = self.src[node_idx].as_py()
+        src_idx_end = self.src[node_idx + 1].as_py()
+        edge_idx = self.dst[src_idx_start: src_idx_end]
+        return pc.take(self.names, edge_idx)
+        
 
     def nodes(self):
         """
@@ -168,6 +215,7 @@ class csrgraph():
             return self.names
         else:
             return np.arange(self.nnodes)
+
 
     def normalize(self, return_self=True):
         """
@@ -179,19 +227,21 @@ class csrgraph():
             whether to change the graph's values and return itself
             this lets us call `G.normalize()` directly
         """
-        new_weights = _row_norm(self.weights, self.src)
+        new_weights = _row_norm(self.weights.to_numpy(), self.src.to_numpy())
         if return_self:
-            self.mat = sparse.csr_matrix((new_weights, self.dst, self.src))
+            G_new = csrgraph(sparse.csr_matrix((new_weights, self.dst, self.src)))
             # Point objects to the correct places
-            self.weights = self.mat.data
-            self.src = self.mat.indptr
-            self.dst = self.mat.indices
+            self.weights = G_new.weights
+            self.src = G_new.src
+            self.dst = G_new.dst
+            G_new = None
             gc.collect()
             return self
         else:
             return csrgraph(sparse.csr_matrix(
                 (new_weights, self.dst, self.src)), 
                 nodenames=self.names)
+
 
     def random_walks(self,
                 walklen=10,
@@ -259,21 +309,24 @@ class csrgraph():
         if (return_weight > 1. or return_weight < 1.
                 or neighbor_weight < 1. or neighbor_weight > 1.):
             if rejective_sampling:
-                walks = _node2vec_walks_with_rejective_sampling(T.weights, T.src, T.dst,
-                                        sampling_nodes=sampling_nodes,
-                                        walklen=walklen,
-                                        return_weight=return_weight,
-                                        neighbor_weight=neighbor_weight)
+                walks = _node2vec_walks_with_rejective_sampling(
+                    T.weights.to_numpy(), T.src.to_numpy(), T.dst.to_numpy(),
+                    sampling_nodes=sampling_nodes,
+                    walklen=walklen,
+                    return_weight=return_weight,
+                    neighbor_weight=neighbor_weight)
             else:
-                walks = _node2vec_walks(T.weights, T.src, T.dst,
-                                        sampling_nodes=sampling_nodes,
-                                        walklen=walklen,
-                                        return_weight=return_weight,
-                                        neighbor_weight=neighbor_weight)
+                walks = _node2vec_walks(
+                    T.weights.to_numpy(), T.src.to_numpy(), T.dst.to_numpy(),
+                    sampling_nodes=sampling_nodes,
+                    walklen=walklen,
+                    return_weight=return_weight,
+                    neighbor_weight=neighbor_weight)
         # much faster implementation for regular walks
         else:
-            walks = _random_walk(T.weights, T.src, T.dst,
-                                 sampling_nodes, walklen)
+            walks = _random_walk(
+                 T.weights.to_numpy(), T.src.to_numpy(), T.dst.to_numpy(),
+                 sampling_nodes, walklen)
         return walks
 
     def ggvec(self, n_components=2,
@@ -340,7 +393,7 @@ class csrgraph():
         # Higher order graph embeddings
         # Method inspired by GraRep (powers of transition matrix)
         if order > 1:
-            norm_weights = _row_norm(self.weights, self.src)
+            norm_weights = _row_norm(self.weights.to_numpy(), self.src.to_numpy())
             tranmat = sparse.csr_matrix((norm_weights, self.dst, self.src))
             target_matrix = tranmat.copy()
             res = np.zeros((self.nnodes, n_components))
@@ -361,7 +414,9 @@ class csrgraph():
             return res
         else:
             return ggvec.ggvec_main(
-                data=self.weights, src=self.src, dst=self.dst,
+                data=self.weights.to_numpy(), 
+                src=self.src.to_numpy(), 
+                dst=self.dst.to_numpy(),
                 n_components=n_components, tol=tol,
                 tol_samples=tol_samples,
                 max_epoch=max_epoch, learning_rate=learning_rate, 
@@ -369,6 +424,7 @@ class csrgraph():
                 negative_decay=negative_decay,
                 exponent=exponent,
                 max_loss=max_loss, verbose=verbose)
+
 
     def glove(self, n_components=2,
               tol=0.0001, max_epoch=10_000, 
@@ -406,11 +462,15 @@ class csrgraph():
         Paper: https://nlp.stanford.edu/pubs/glove.pdf
         Original implementation: https://github.com/stanfordnlp/GloVe/blob/master/src/glove.c
         """
-        w = glove.glove_main(weights=self.weights, dst=self.dst, src=self.src,
-                           n_components=n_components, tol=tol,
-                           max_epoch=max_epoch, learning_rate=learning_rate,
-                           max_count=max_count, exponent=exponent,
-                           max_loss=max_loss, verbose=verbose)
+        w = glove.glove_main(
+            weights=self.weights.to_numpy(),
+            dst=self.dst.to_numpy(),
+            src=self.src.to_numpy(),
+            n_components=n_components, tol=tol,
+            max_epoch=max_epoch, learning_rate=learning_rate,
+            max_count=max_count, exponent=exponent,
+            max_loss=max_loss, verbose=verbose
+        )
         return w
 
     def grarep(self, n_components=2,
@@ -451,10 +511,15 @@ class csrgraph():
             GraRep returns one embedding matrix per order.
             This function reduces it to a single matrix.
         """
-        w_array = grarep.grarep_main(weights=self.weights, dst=self.dst, src=self.src,
-                           n_components=n_components, order=order,
-                           embedder=embedder,verbose=verbose)
+        w_array = grarep.grarep_main(
+            weights=self.weights.to_numpy(),
+            dst=self.dst.to_numpy(),
+            src=self.src.to_numpy(),
+            n_components=n_components, order=order,
+            embedder=embedder, verbose=verbose
+        )
         return w_array
+
 
     def random_walk_resample(self, walklen=4, epochs=30):
         """
@@ -478,6 +543,13 @@ class csrgraph():
             elist.src.to_numpy(), elist.dst.to_numpy(), 
             weights, nnodes=self.nnodes, nodenames=self.names)
 
+
+    def to_scipy(self):
+        return sparse.csr_array((self.weights, self.dst, self.src))
+
+
+    def to_numpy(self):
+        return self.to_scipy().todense()
     #
     #
     # TODO: Organize Graph method here

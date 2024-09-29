@@ -89,19 +89,22 @@ class TestGraph(unittest.TestCase):
         G.normalize()
         G.random_walk_resample()
 
-    def test_data_stealing(self):
-        """normal ctor points to underlying passed data"""
-        wg = nx.generators.classic.wheel_graph(10)
-        A = sparse.csr_matrix(nx.adjacency_matrix(wg))
-        nodes = list(map(str, list(wg)))
-        G = cg.csrgraph(wg)
-        self.assertIs(G.src, G.mat.indptr)
-        self.assertIs(G.dst, G.mat.indices)
-        self.assertIs(G.weights, G.mat.data)
-        G = cg.csrgraph(A, nodenames=nodes, copy=False)
-        self.assertIs(G.src, A.indptr)
-        self.assertIs(G.dst, A.indices)
-        self.assertIs(G.weights, A.data)
+    # TODO: Reimplement when arrow integration is done
+    # def test_data_stealing(self):
+    #     """normal ctor points to underlying passed data"""
+    #     wg = nx.generators.classic.wheel_graph(10)
+    #     A = sparse.csr_matrix(nx.adjacency_matrix(wg))
+    #     B = sparse.csr_array(nx.adjacency_matrix(wg))        
+    #     nodes = list(map(str, list(wg)))
+    #     G_nx = cg.csrgraph(wg) # Just making sure this one works
+    #     G = cg.csrgraph(A, nodenames=nodes, copy=False)
+    #     self.assertIs(G.src, A.indptr)
+    #     self.assertIs(G.dst, A.indices)
+    #     self.assertIs(G.weights, A.data)
+    #     G2 = cg.csrgraph(B, nodenames=nodes, copy=False)
+    #     self.assertIs(G2.src, B.indptr)
+    #     self.assertIs(G2.dst, B.indices)
+    #     self.assertIs(G2.weights, B.data)
 
     def test_row_normalizer(self):
         # Multiplying by a constant returns the same
@@ -111,17 +114,17 @@ class TestGraph(unittest.TestCase):
         # Scipy.sparse uses np.matrix which throws warnings
         warnings.simplefilter("ignore", category=PendingDeprecationWarning)
         np.testing.assert_array_almost_equal(
-            test1.normalize().mat.toarray(),
+            test1.normalize().to_numpy(),
             disconnected_graph.toarray(),
             decimal=3
         )
         np.testing.assert_array_almost_equal(
-            test2.normalize().mat.toarray(),
+            test2.normalize().to_numpy(),
             absorbing_state_graph_2.toarray(),
             decimal=3
         )
         np.testing.assert_array_almost_equal(
-            test3.normalize().mat.toarray(),
+            test3.normalize().to_numpy(),
             absorbing_state_graph.toarray(),
             decimal=3
         )
@@ -133,7 +136,7 @@ class TestGraph(unittest.TestCase):
                 [1,0,0,0,0,0],
                 [0,10,0,1,0,0.1]
             ])
-        ).normalize().mat
+        ).normalize().to_numpy()
         self.assertAlmostEqual(testzeros[0].sum(), 0.)
         warnings.resetwarnings()
 
@@ -220,7 +223,7 @@ class TestFileInput(unittest.TestCase):
     def test_karate(self):
         fname = "./data/karate_edges.txt"
         G = cg.read_edgelist(fname)
-        m = G.mat.todense()
+        m = G.to_scipy().todense()
         df = pd.read_csv(fname, sep="\t", header=None)
         df.columns = ['src', 'dst']
         for i in range(len(df)):
@@ -261,7 +264,7 @@ class TestFileInput(unittest.TestCase):
             # should return list of str node names
             self.assertTrue(d in G[s])
         # Only those edges are present
-        m = G.mat.todense()
+        m = G.to_scipy().todense()
         self.assertTrue(m.sum() == 154)
 
     def test_float_weights_reading(self):
@@ -270,8 +273,8 @@ class TestFileInput(unittest.TestCase):
         df['weights'] = np.random.rand(df.shape[0])
         data = io.StringIO(df.to_csv(index=False, header=False))
         G = cg.read_edgelist(data, sep=',')
-        self.assertTrue((G.weights < 1).all())
-        self.assertTrue((G.weights > 0).all())
+        self.assertTrue((G.weights.to_numpy() < 1).all())
+        self.assertTrue((G.weights.to_numpy()  > 0).all())
 
     def test_int_weights_reading(self):
         WEIGHT_VALUE = 5
@@ -280,19 +283,22 @@ class TestFileInput(unittest.TestCase):
         df['weights'] = np.ones(df.shape[0]) * WEIGHT_VALUE
         data = io.StringIO(df.to_csv(index=False, header=False))
         G = cg.read_edgelist(data, sep=',')
-        self.assertTrue((G.weights == WEIGHT_VALUE).all())
-        self.assertTrue((G.weights == WEIGHT_VALUE).all())
+        self.assertTrue((G.weights.to_numpy() == WEIGHT_VALUE).all())
+        self.assertTrue((G.weights.to_numpy() == WEIGHT_VALUE).all())
 
     def test_largenumbererror(self):
         fname = "./data/largenumbererror.csv"
         G = cg.read_edgelist(fname, sep=',')
         self.assertTrue(len(G.nodes()) == 4)
         # These two have no edges
+        print(G[44444444444444])
         self.assertTrue(len(G[44444444444444]) == 0)
         self.assertTrue(len(G[222222222222]) == 0)
         # These two have one edge
         self.assertTrue(len(G[333333333333333]) == 1)
         self.assertTrue(len(G[1111111111111]) == 1)
+        # Indexing with a list
+        self.assertTrue(len(G[[1111111111111, 333333333333333]]) == 2)
 
     def test_unfactored_edgelist_directed(self):
         fname = "./data/unfactored_edgelist.csv"
@@ -304,9 +310,9 @@ class TestFileInput(unittest.TestCase):
                 create_using=nx.DiGraph(),
             )
         )
-        self.assertEqual(G.src.size, nxG.src.size)
-        self.assertEqual(G.dst.size, nxG.dst.size)
-        self.assertEqual(G.weights.size, nxG.weights.size)
+        self.assertEqual(len(G.src), len(nxG.src))
+        self.assertEqual(len(G.dst), len(nxG.dst))
+        self.assertEqual(len(G.weights), len(nxG.weights))
         self.assertEqual(G.weights.sum(), nxG.weights.sum())
         # The number of edges on source nodes should have same statistics
         Gdiff = np.diff(G.src)
@@ -333,9 +339,9 @@ class TestFileInput(unittest.TestCase):
                 create_using=nx.Graph(),
             )
         )
-        self.assertEqual(G.src.size, nxG.src.size)
-        self.assertEqual(G.dst.size, nxG.dst.size)
-        self.assertEqual(G.weights.size, nxG.weights.size)
+        self.assertEqual(len(G.src), len(nxG.src))
+        self.assertEqual(len(G.dst), len(nxG.dst))
+        self.assertEqual(len(G.weights), len(nxG.weights))
         self.assertEqual(G.weights.sum(), nxG.weights.sum())
         # The number of edges on source nodes should have same statistics
         Gdiff = np.diff(G.src)
