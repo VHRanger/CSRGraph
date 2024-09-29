@@ -55,3 +55,13 @@ All the procedures in scipy `csgraph` module [here](https://docs.scipy.org/doc/s
 **Only float edge weights** Eventually we might support complex edge weight objects, but for now we only support 32bit floats.
 
 **Accessing nodes by their name is O(log2(n))** Internally, CSRGraphs' map of node names is a (binary searched) sorted array indexing into node ID. Since node names are accessed much more often than than node IDs by name, this is a worthy tradeoff, but it may be unexpected if you heavily use the `G[node_name]` operator.
+
+
+# Development
+
+
+To test, run:
+
+```
+clear && python -m unittest discover tests -f
+```

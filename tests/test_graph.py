@@ -2,6 +2,8 @@ import io
 import networkx as nx
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
 import random
 from scipy import sparse
 from sklearn import cluster, manifold, metrics
@@ -221,7 +223,7 @@ class TestFileInput(unittest.TestCase):
     Test 
     """
     def test_karate(self):
-        fname = "./data/karate_edges.txt"
+        fname = "./data/karate_edges.txt"     
         G = cg.read_edgelist(fname)
         m = G.to_scipy().todense()
         df = pd.read_csv(fname, sep="\t", header=None)
@@ -257,21 +259,22 @@ class TestFileInput(unittest.TestCase):
         for c in df2.columns:
             df2[c] = df2[c].map(name_dict)
         df2.columns = ['src', 'dst']
+        names_dtype = G.names.type
         for i in range(len(df2)):
             s = df2.iloc[i].src
-            d = df2.iloc[i].dst
+            d = pc.cast(df2.iloc[i].dst, names_dtype)
             # addressing graph by __getitem__ with str
             # should return list of str node names
             self.assertTrue(d in G[s])
         # Only those edges are present
-        m = G.to_scipy().todense()
+        m = G.to_numpy()
         self.assertTrue(m.sum() == 154)
 
     def test_float_weights_reading(self):
         fname = "./data/karate_edges.txt"
         df = pd.read_csv(fname, sep="\t", header=None)
         df['weights'] = np.random.rand(df.shape[0])
-        data = io.StringIO(df.to_csv(index=False, header=False))
+        data = io.BytesIO(df.to_csv(index=False, header=False).encode())
         G = cg.read_edgelist(data, sep=',')
         self.assertTrue((G.weights.to_numpy() < 1).all())
         self.assertTrue((G.weights.to_numpy()  > 0).all())
@@ -281,7 +284,7 @@ class TestFileInput(unittest.TestCase):
         fname = "./data/karate_edges.txt"
         df = pd.read_csv(fname, sep="\t", header=None)
         df['weights'] = np.ones(df.shape[0]) * WEIGHT_VALUE
-        data = io.StringIO(df.to_csv(index=False, header=False))
+        data = io.BytesIO(df.to_csv(index=False, header=False).encode())
         G = cg.read_edgelist(data, sep=',')
         self.assertTrue((G.weights.to_numpy() == WEIGHT_VALUE).all())
         self.assertTrue((G.weights.to_numpy() == WEIGHT_VALUE).all())
@@ -291,14 +294,11 @@ class TestFileInput(unittest.TestCase):
         G = cg.read_edgelist(fname, sep=',')
         self.assertTrue(len(G.nodes()) == 4)
         # These two have no edges
-        print(G[44444444444444])
         self.assertTrue(len(G[44444444444444]) == 0)
         self.assertTrue(len(G[222222222222]) == 0)
         # These two have one edge
         self.assertTrue(len(G[333333333333333]) == 1)
         self.assertTrue(len(G[1111111111111]) == 1)
-        # Indexing with a list
-        self.assertTrue(len(G[[1111111111111, 333333333333333]]) == 2)
 
     def test_unfactored_edgelist_directed(self):
         fname = "./data/unfactored_edgelist.csv"
@@ -461,10 +461,10 @@ class TestNodeWalks(unittest.TestCase):
         Bug on node2vec random walks being segfault/out-of-bounds
         Should be fixed forever
         """
-        G = cg.read_edgelist("./data/wiki_edgelist.txt")
+        G = cg.read_edgelist("./data/wiki_edgelist.txt", sep=' ')
         rw = G.random_walks(return_weight=0.2)
-        self.assertEqual(int(G.nodes().max()), rw.max())
-        self.assertEqual(int(G.nodes().min()), rw.min())
+        self.assertEqual(int(pc.max(G.nodes()).as_py()), rw.max())
+        self.assertEqual(int(pc.min(G.nodes()).as_py()), rw.min())
 
 
 if __name__ == '__main__':

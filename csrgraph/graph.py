@@ -8,6 +8,7 @@ import os
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
+from pyarrow import csv
 from scipy import sparse
 from sklearn.decomposition import TruncatedSVD
 import time
@@ -196,11 +197,8 @@ class csrgraph():
         #     (self.src[node_id]).as_py()
         #     : (self.src[node_id+1]).as_py()
         # ]
-        if not isinstance(node, Iterable):
-            node = np.array([node])
-        nodes_list = pa.array(node)
-        pc.cast(nodes_list, self.names.type)        
-        node_idx = pc.index(self.names, nodes_list).as_py()
+        pc.cast(node, self.names.type)        
+        node_idx = pc.index(self.names, node).as_py()
         src_idx_start = self.src[node_idx].as_py()
         src_idx_end = self.src[node_idx + 1].as_py()
         edge_idx = self.dst[src_idx_start: src_idx_end]
@@ -558,7 +556,12 @@ class csrgraph():
     #
     #
 
-def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=False, **readcsvkwargs):
+def read_edgelist(f, 
+        directed=True, 
+        sep="\t", 
+        header=None, 
+        keep_default_na=False, 
+        **readcsvkwargs):
     """
     Creates a csrgraph from an edgelist file.
 
@@ -588,10 +591,44 @@ def read_edgelist(f, directed=True, sep=r"\s+", header=None, keep_default_na=Fal
     Returns : csrgraph
     """
     # Read in csv correctly to each column
-    elist = pd.read_csv(
-        f, sep=sep, header=header, 
-        keep_default_na=keep_default_na, **readcsvkwargs
+    read_options = csv.ReadOptions(
+        use_threads=True, 
+        block_size=None, 
+        skip_rows=0, 
+        skip_rows_after_names=0, 
+        column_names=None, 
+        autogenerate_column_names=True, 
+        encoding='utf8'
     )
+    parse_options = csv.ParseOptions(
+        delimiter=sep,
+        quote_char='"',
+        double_quote=True,
+        escape_char=False,
+        newlines_in_values=False,
+        ignore_empty_lines=True,
+        invalid_row_handler=None
+    )
+    convert_options = csv.ConvertOptions(
+        check_utf8=True, 
+        column_types=None,
+        null_values=None,
+        true_values=None,
+        false_values=None,
+        decimal_point=".",
+        strings_can_be_null=False,
+        quoted_strings_can_be_null=True,
+        include_columns=None,
+        include_missing_columns=False,
+        auto_dict_encode=False,
+        auto_dict_max_cardinality=None,
+        timestamp_parsers=None
+    )
+    elist = csv.read_csv(f, 
+        read_options=read_options, parse_options=parse_options,
+        convert_options=convert_options
+    )
+    elist = elist.to_pandas()
     return from_df(elist, directed=directed)
 
 
