@@ -558,8 +558,8 @@ class csrgraph():
 
 def read_edgelist(f, 
         directed=True, 
-        sep="\t", 
-        header=None, 
+        sep="infer", 
+        header="infer", 
         keep_default_na=False, 
         **readcsvkwargs):
     """
@@ -590,6 +590,8 @@ def read_edgelist(f,
         Pass these kwargs as you would normally to pd.read_csv.
     Returns : csrgraph
     """
+    header = infer_header(f) if header=="infer" else header
+    sep = infer_sep(f) if sep=="infer" else sep
     # Read in csv correctly to each column
     read_options = csv.ReadOptions(
         use_threads=True, 
@@ -625,11 +627,17 @@ def read_edgelist(f,
         timestamp_parsers=None
     )
     elist = csv.read_csv(f, 
-        read_options=read_options, parse_options=parse_options,
+        read_options=read_options, 
+        parse_options=parse_options,
         convert_options=convert_options
     )
-    elist = elist.to_pandas()
     return from_df(elist, directed=directed)
+
+
+def edgelist_to_ipc():
+    """
+    Translates edgelist  
+    """
 
 
 def from_df(elist: pd.DataFrame, directed: bool = True) -> csrgraph:
