@@ -237,6 +237,22 @@ class TestFileInput(unittest.TestCase):
         # Only those edges are present
         self.assertTrue(m.sum() == 154)
 
+    def test_names(self):
+        fname = "./data/names.csv"     
+        G = cg.read_edgelist(fname)
+        df = pd.read_csv(fname, sep=",", header=None)
+        unique_vals = len(pd.unique(df.values.ravel('K')))
+        self.assertEqual(G.nnodes, unique_vals)
+
+        
+    def test_names_evil_tabbed(self):
+        fname = "./data/name_pairs_evil_tabs.tsv"
+        G = cg.read_edgelist(fname, sep="\t")
+        df = pd.read_csv(fname, sep="\t", header=None)
+        unique_vals = len(pd.unique(df.values.ravel('K')))
+        self.assertEqual(G.nnodes, unique_vals)
+
+
     def test_string_karate(self):
         N_NODES = 35
         STR_LEN = 10

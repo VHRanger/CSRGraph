@@ -1,6 +1,8 @@
 from collections.abc import Iterable
 from copy import deepcopy
+import csv
 import gc
+import io
 import networkx as nx
 import numba
 import numpy as np
@@ -8,7 +10,7 @@ import os
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
-from pyarrow import csv
+from pyarrow import csv as pa_csv
 from scipy import sparse
 from sklearn.decomposition import TruncatedSVD
 import time
@@ -94,6 +96,12 @@ class csrgraph():
         if not hasattr(self, 'names'):
             self.names = pd.Series(np.arange(self.nnodes))
         self.names = pa.Array.from_pandas(self.names)
+        if self.nnodes != len(self.names):
+            raise ValueError(
+                "index pointer must have length equal to number of nodes\n"
+                + f"nnodes: {self.nnodes}, indptr array: {len(self.src)}\n"
+                + f"number of node names: {len(self.names)}"
+            )
         # Bounds check once here otherwise there be dragons later
         max_idx = np.max(self.dst)
         if self.nnodes < max_idx:
@@ -590,47 +598,65 @@ def read_edgelist(f,
         Pass these kwargs as you would normally to pd.read_csv.
     Returns : csrgraph
     """
-    header = infer_header(f) if header=="infer" else header
-    sep = infer_sep(f) if sep=="infer" else sep
-    # Read in csv correctly to each column
-    read_options = csv.ReadOptions(
-        use_threads=True, 
-        block_size=None, 
-        skip_rows=0, 
-        skip_rows_after_names=0, 
-        column_names=None, 
-        autogenerate_column_names=True, 
-        encoding='utf8'
-    )
-    parse_options = csv.ParseOptions(
-        delimiter=sep,
-        quote_char='"',
-        double_quote=True,
-        escape_char=False,
-        newlines_in_values=False,
-        ignore_empty_lines=True,
-        invalid_row_handler=None
-    )
-    convert_options = csv.ConvertOptions(
-        check_utf8=True, 
-        column_types=None,
-        null_values=None,
-        true_values=None,
-        false_values=None,
-        decimal_point=".",
-        strings_can_be_null=False,
-        quoted_strings_can_be_null=True,
-        include_columns=None,
-        include_missing_columns=False,
-        auto_dict_encode=False,
-        auto_dict_max_cardinality=None,
-        timestamp_parsers=None
-    )
-    elist = csv.read_csv(f, 
-        read_options=read_options, 
-        parse_options=parse_options,
-        convert_options=convert_options
-    )
+    with open(f, encoding='utf-8', errors='ignore') if isinstance(f, str) \
+            else io.TextIOWrapper(f, encoding='utf-8') as fname:
+        csv_sniff = csv.Sniffer()
+        sample = fname.read(1024)
+        dialect = csv_sniff.sniff(sample)
+        # Parse header
+        skip_rows_before = 0
+        if header == "infer":
+            has_header = False
+            has_header = csv_sniff.has_header(sample)
+        elif header is None:
+            has_header = False
+        if sep == 'infer':
+            sep = dialect.delimiter
+        else:
+            if len(sep) != 1:
+                raise ValueError(f"sep must be 1 char, got {sep}")
+            sep = sep
+        read_options = pa_csv.ReadOptions(
+            use_threads=True, 
+            block_size=None, 
+            skip_rows=0, # Rows to ignore before column names
+            skip_rows_after_names=0, # Rows to ignore after column names
+            column_names=None,
+            # Autogenerate columns if there's no header only
+            autogenerate_column_names=not has_header, 
+            encoding='utf8'
+        )
+        parse_options = pa_csv.ParseOptions(
+            delimiter=sep,
+            quote_char=dialect.quotechar,
+            double_quote=dialect.doublequote,
+            escape_char=False,
+            newlines_in_values=False,
+            ignore_empty_lines=True,
+            invalid_row_handler=None
+        )
+        convert_options = pa_csv.ConvertOptions(
+            check_utf8=True, 
+            column_types=None,
+            null_values=None,
+            true_values=None,
+            false_values=None,
+            decimal_point=".",
+            strings_can_be_null=False,
+            quoted_strings_can_be_null=True,
+            include_columns=None,
+            include_missing_columns=False,
+            auto_dict_encode=False,
+            auto_dict_max_cardinality=None,
+            timestamp_parsers=None
+        )
+        # Reset file cursor to start for full read
+        fname.seek(0)
+        elist = pa_csv.read_csv(f, 
+            read_options=read_options, 
+            parse_options=parse_options,
+            convert_options=convert_options
+        ).to_pandas()
     return from_df(elist, directed=directed)
 
 
